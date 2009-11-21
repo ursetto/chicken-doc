@@ -111,29 +111,36 @@
 ;; (signature->identifier "(prepared-cache-size n" 'procedure)
 
 (define cdoc-root (make-parameter "~/tmp/cdoc/root"))
+(define +rx:%escape+ (irregex "[%/,]"))
 (define (id->key id)
-  (let ((str (->string id)))
-    (cond ((eqv? (string-ref str 0) #\,)
-           (error "Identifier must not start with a comma" str))
-          ((or (string=? str ".")
+  (define (escape str)
+    (irregex-replace/all +rx:%escape+ str
+                         (lambda (m) (sprintf "%~x"
+                                         (char->integer
+                                          (string-ref (irregex-match-substring m 0) 0))))))
+  (let ((str (escape (->string id))))
+    (cond ((or (string=? str ".")
                (string=? str ".."))
-           (error "Identifier must not be . or .." str))
-        str)))
+           (warning "Identifier must not be . or .." str)     ;; ?
+           #f)
+          (else
+           str))))
 (define (write-key text type sig id path)
-  (change-directory (cdoc-root))
-  (change-directory (make-pathname path #f))
-  (create-directory (id->key id))
-  (change-directory (id->key id))
-  (with-output-to-file ",meta"
-    (lambda ()
-      (for-each (lambda (x)
-                  (write x) (newline))
-                `((type ,type)
-                  (signature ,sig)
-                  (identifier ,id)))))
-  (with-output-to-file ",text"
-    (lambda ()
-      (display text))))
+  (and-let* ((key (id->key id)))
+    (change-directory (cdoc-root))
+    (change-directory (make-pathname path #f))
+    (create-directory key)
+    (change-directory key)
+    (with-output-to-file ",meta"
+      (lambda ()
+        (for-each (lambda (x)
+                    (write x) (newline))
+                  `((type ,type)
+                    (signature ,sig)
+                    (identifier ,id)))))
+    (with-output-to-file ",text"
+      (lambda ()
+        (display text)))))
 
 (define (write-eggshell name)
   (write-key "This space intentionally left blank"
