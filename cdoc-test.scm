@@ -11,6 +11,7 @@
                "<" (submatch (or ,@+identifier-tags+)) ">"
                (submatch (?? (+ any)))
                "</" (backref 1) ">"
+               (? "<br>")
                eol)))
 (define +rx:section+
   (irregex '(: bol
@@ -47,9 +48,10 @@
     (lambda ()
       (let loop ((line (read-line))
                  (section 1)
-                 (tag? #f)
+                 (tag? #f)   ; remove in favor of (pair? tags)
                  (tags '())
-                 (tag-body '()))
+                 (tag-body '())
+                 (where 'section))
         (cond ((eof-object? line)
                (when tag?
                  (printf "tags: ~S\n" tags)
@@ -57,12 +59,25 @@
                                            (intersperse tag-body "\n"))))
                #f)
               ((tag-line line) =>
+               ;; FIXME: Existing tag should be terminated unless the last line
+               ;; was also a tag.
                (match-lambda ((type sig id)
                          ;;                          (print "type: " type " sig: " sig
                          ;;                                 " id: " id)
-                         (loop (read-line) section #t (cons (list type sig id)
-                                                            tags)
-                               (cons line tag-body)))))
+                         (cond ((eq? where 'tag-header)
+                                (loop (read-line) section #t (cons (list type sig id)
+                                                                   tags)
+                                      (cons line tag-body)
+                                      where))
+                               (else
+                                (when tag?
+                                  (printf "tags: ~S\n" tags)
+                                  (printf "tag-body: ~A\n" (string-concatenate-reverse
+                                                            (intersperse tag-body "\n"))))
+                                (loop (read-line) section #t (cons (list type sig id)
+                                                                   '())
+                                      (cons line '())
+                                      'tag-header))))))
               ((section-line line) =>
                (match-lambda ((num title)
                          ;; (print "section: " num " title: " title)
@@ -70,13 +85,13 @@
                                 (printf "tags: ~S\n" tags)
                                 (printf "tag-body: ~A\n" (string-concatenate-reverse
                                                           (intersperse tag-body "\n")))
-                                (loop (read-line) section #f tags tag-body))
+                                (loop (read-line) section #f '() '() 'section))
                                (else
-                                (loop (read-line) section tag? tags tag-body))))))
+                                (loop (read-line) section tag? tags tag-body 'section))))))
               (else
                (if tag?
-                   (loop (read-line) section tag? tags (cons line tag-body))
-                   (loop (read-line) section tag? tags tag-body)))
+                   (loop (read-line) section tag? tags (cons line tag-body) 'line)
+                   (loop (read-line) section tag? tags tag-body 'line)))
               )))))
 
 
