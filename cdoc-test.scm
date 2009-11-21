@@ -1,3 +1,5 @@
+;;; cdoc-test
+
 (use matchable)
 (use irregex)
 
@@ -43,7 +45,20 @@
           (list num title))
          (#f #f)))
 
-(define (check-all fn)
+;; (define (write-tags tags tag-body)
+;;    (printf "tags: ~S\n" tags)
+;;    (printf "tag-body: ~A\n" (string-concatenate-reverse
+;;                              (intersperse tag-body "\n"))))
+(define (write-tags tags tag-body path)
+  (for-each (match-lambda ((type sig id)
+                      (if id
+                          (write-key (string-concatenate-reverse
+                                      (intersperse tag-body "\n"))
+                                     type sig id path)
+                          (warning "Skipped writing tag for signature" sig))))
+            (reverse tags)))
+
+(define (check-all fn path)
   (with-input-from-file fn
     (lambda ()
       (let loop ((line (read-line))
@@ -54,9 +69,7 @@
                  (where 'section))
         (cond ((eof-object? line)
                (when tag?
-                 (printf "tags: ~S\n" tags)
-                 (printf "tag-body: ~A\n" (string-concatenate-reverse
-                                           (intersperse tag-body "\n"))))
+                 (write-tags tags tag-body path))
                #f)
               ((tag-line line) =>
                ;; FIXME: Existing tag should be terminated unless the last line
@@ -71,9 +84,7 @@
                                       where))
                                (else
                                 (when tag?
-                                  (printf "tags: ~S\n" tags)
-                                  (printf "tag-body: ~A\n" (string-concatenate-reverse
-                                                            (intersperse tag-body "\n"))))
+                                  (write-tags tags tag-body path))
                                 (loop (read-line) section #t (cons (list type sig id)
                                                                    '())
                                       '()
@@ -82,9 +93,7 @@
                (match-lambda ((num title)
                          ;; (print "section: " num " title: " title)
                          (cond (tag?
-                                (printf "tags: ~S\n" tags)
-                                (printf "tag-body: ~A\n" (string-concatenate-reverse
-                                                          (intersperse tag-body "\n")))
+                                (write-tags tags tag-body path)
                                 (loop (read-line) section #f '() '() 'section))
                                (else
                                 (loop (read-line) section tag? tags tag-body 'section))))))
@@ -96,7 +105,77 @@
 
 
 ;; (check-line "<procedure>(abc def)</procedure>")
-;; (check-all "~/scheme/chicken-wiki/eggref/4/sql-de-lite")
+;; (check-all "~/scheme/chicken-wiki/eggref/4/sql-de-lite" (list "sql-de-lite"))
 ;; (check-all "~/scheme/cdoc/sql-de-lite.wiki")
-;; (check-all "~/scheme/chicken-wiki/man/4/Unit posix")
+;; (check-all "~/scheme/chicken-wiki/man/4/Unit posix" (list "posix"))
 ;; (signature->identifier "(prepared-cache-size n" 'procedure)
+
+(define cdoc-root (make-parameter "~/tmp/cdoc/root"))
+(define (id->key id)
+  (let ((str (->string id)))
+    (cond ((eqv? (string-ref str 0) #\,)
+           (error "Identifier must not start with a comma" str))
+          ((or (string=? str ".")
+               (string=? str ".."))
+           (error "Identifier must not be . or .." str))
+        str)))
+(define (write-key text type sig id path)
+  (change-directory (cdoc-root))
+  (change-directory (make-pathname path #f))
+  (create-directory (id->key id))
+  (change-directory (id->key id))
+  (with-output-to-file ",meta"
+    (lambda ()
+      (for-each (lambda (x)
+                  (write x) (newline))
+                `((type ,type)
+                  (signature ,sig)
+                  (identifier ,id)))))
+  (with-output-to-file ",text"
+    (lambda ()
+      (display text))))
+
+(define (write-eggshell name)
+  (write-key "This space intentionally left blank"
+             'egg name name '(".")))
+(define (write-unitshell name id)
+  (write-key "This space intentionally left blank"
+             'unit name id '(".")))
+
+(define +wikidir+ "~/scheme/chicken-wiki")
+(define +eggdir+ (string-append +wikidir+ "/eggref/4"))
+(define +mandir+ (string-append +wikidir+ "/man/4"))
+(define (parse-egg name)
+  (let ((fn (make-pathname +eggdir+ name))
+        (path (list name)))
+    (write-eggshell name)
+    (check-all fn path)))
+(define (parse-unit name id)
+  (let ((fn (make-pathname +mandir+ name))
+        (path (list id)))
+    (write-unitshell name id)
+    (check-all fn path)))
+
+
+;;; hilevel
+
+(use srfi-1)
+(define (list-keys name)  ;; Test: list keys (directories) under pathname
+  (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))
+          (directory (make-pathname (list (cdoc-root) name) #f))))
+(define (describe name)   ;; Test: print ,text and ,meta data for pathname
+  (let* ((pathname (make-pathname (list (cdoc-root) name) #f))
+         (textfile (make-pathname pathname ",text"))
+         (metafile (make-pathname pathname ",meta")))
+    (cond ((and (directory? pathname)
+                (regular-file? textfile)
+                (regular-file? metafile))
+           (let ((metadata (with-input-from-file metafile read-file)))
+             (printf "~a: ~a\n"
+                     (cadr (assq 'type metadata))
+                     (cadr (assq 'signature metadata)))
+             (with-input-from-file textfile
+               (lambda ()
+                 (for-each-line (lambda (x) (display x) (newline)))))))
+          (else
+           (error "No such identifier" name)))))
