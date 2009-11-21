@@ -46,24 +46,42 @@
   (with-input-from-file fn
     (lambda ()
       (let loop ((line (read-line))
-                 (section 1))
+                 (section 1)
+                 (tag? #f)
+                 (tags '())
+                 (tag-body '()))
         (cond ((eof-object? line)
+               (when tag?
+                 (printf "tags: ~S\n" tags)
+                 (printf "tag-body: ~A\n" (string-concatenate-reverse
+                                           (intersperse tag-body "\n"))))
                #f)
               ((tag-line line) =>
                (match-lambda ((type sig id)
-                         (print "type: " type " sig: " sig
-                                " id: " id)
-                         (loop (read-line) section))))
+                         ;;                          (print "type: " type " sig: " sig
+                         ;;                                 " id: " id)
+                         (loop (read-line) section #t (cons (list type sig id)
+                                                            tags)
+                               (cons line tag-body)))))
               ((section-line line) =>
                (match-lambda ((num title)
-                         (print "section: " num " title: " title)
-                         (loop (read-line) section))))
+                         ;; (print "section: " num " title: " title)
+                         (cond (tag?
+                                (printf "tags: ~S\n" tags)
+                                (printf "tag-body: ~A\n" (string-concatenate-reverse
+                                                          (intersperse tag-body "\n")))
+                                (loop (read-line) section #f tags tag-body))
+                               (else
+                                (loop (read-line) section tag? tags tag-body))))))
               (else
-               (loop (read-line) section))
+               (if tag?
+                   (loop (read-line) section tag? tags (cons line tag-body))
+                   (loop (read-line) section tag? tags tag-body)))
               )))))
 
 
 ;; (check-line "<procedure>(abc def)</procedure>")
 ;; (check-all "~/scheme/chicken-wiki/eggref/4/sql-de-lite")
+;; (check-all "~/scheme/cdoc/sql-de-lite.wiki")
 ;; (check-all "~/scheme/chicken-wiki/man/4/Unit posix")
 ;; (signature->identifier-string "(prepared-cache-size n" 'procedure)
