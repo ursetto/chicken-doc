@@ -67,7 +67,7 @@
                          (cond ((eq? where 'tag-header)
                                 (loop (read-line) section #t (cons (list type sig id)
                                                                    tags)
-                                      (cons line tag-body)
+                                      tag-body
                                       where))
                                (else
                                 (when tag?
@@ -76,7 +76,7 @@
                                                             (intersperse tag-body "\n"))))
                                 (loop (read-line) section #t (cons (list type sig id)
                                                                    '())
-                                      (cons line '())
+                                      '()
                                       'tag-header))))))
               ((section-line line) =>
                (match-lambda ((num title)
@@ -99,4 +99,4 @@
 ;; (check-all "~/scheme/chicken-wiki/eggref/4/sql-de-lite")
 ;; (check-all "~/scheme/cdoc/sql-de-lite.wiki")
 ;; (check-all "~/scheme/chicken-wiki/man/4/Unit posix")
-;; (signature->identifier-string "(prepared-cache-size n" 'procedure)
+;; (signature->identifier "(prepared-cache-size n" 'procedure)
