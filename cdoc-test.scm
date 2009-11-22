@@ -171,7 +171,9 @@
   (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))
           (directory (make-pathname (list (cdoc-root) name) #f))))
 (define (describe name)   ;; Test: print ,text and ,meta data for pathname
-  (let* ((pathname (make-pathname (list (cdoc-root) name) #f))
+  (let* ((name (if (pair? name) name (list name)))
+         (name (map ->string name))
+         (pathname (make-pathname (cons (cdoc-root) name) #f))
          (textfile (make-pathname pathname ",text"))
          (metafile (make-pathname pathname ",meta")))
     (cond ((and (directory? pathname)
@@ -186,3 +188,6 @@
                  (for-each-line (lambda (x) (display x) (newline)))))))
           (else
            (error "No such identifier" name)))))
+(define (refresh-eggs)
+  (for-each (lambda (x) (print x) (parse-egg x)) (directory +eggdir+)))
+
