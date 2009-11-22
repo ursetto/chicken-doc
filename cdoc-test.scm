@@ -55,7 +55,8 @@
                           (write-key (string-concatenate-reverse
                                       (intersperse tag-body "\n"))
                                      type sig id path)
-                          (warning "Skipped writing tag for signature" sig))))
+;;                           (warning "Skipped writing tag for signature" sig)
+                          )))
             (reverse tags)))
 
 (define (check-all fn path)
@@ -109,9 +110,13 @@
 ;; (check-all "~/scheme/cdoc/sql-de-lite.wiki")
 ;; (check-all "~/scheme/chicken-wiki/man/4/Unit posix" (list "posix"))
 ;; (signature->identifier "(prepared-cache-size n" 'procedure)
+;; (parse-unit "Non-standard macros and special forms" "chicken")
+;; (parse-unit "Locations" "chicken")
+
 
 (define cdoc-root (make-parameter "~/tmp/cdoc/root"))
 (define +rx:%escape+ (irregex "[%/,]"))
+(define +rx:%unescape+ (irregex "%([0-9a-fA-F][0-9a-fA-F])"))
 (define (id->key id)
   (define (escape str)
     (irregex-replace/all +rx:%escape+ str
@@ -125,6 +130,14 @@
            #f)
           (else
            str))))
+(define (key->id key)
+  (string->symbol
+   (irregex-replace/all +rx:%unescape+ key
+                        (lambda (m) (string
+                                (integer->char
+                                 (string->number (irregex-match-substring m 1)
+                                                 16)))))))
+
 (define (write-key text type sig id path)
   (and-let* ((key (id->key id)))
     (change-directory (cdoc-root))
@@ -181,16 +194,43 @@
     (cond ((and (directory? pathname)
                 (regular-file? textfile)
                 (regular-file? metafile))
-           (let ((metadata (with-input-from-file metafile read-file)))
-             ;; Now embedded in text body; no need to print sig
-;;              (printf "~a: ~a\n"
-;;                      (cadr (assq 'type metadata))
-;;                      (cadr (assq 'signature metadata)))
-             (with-input-from-file textfile
-               (lambda ()
-                 (for-each-line (lambda (x) (display x) (newline)))))))
+           ;; Now embedded in text body; no need to print sig
+           ;; (let ((metadata (with-input-from-file metafile read-file)))
+           ;;   (printf "~a: ~a\n"
+           ;;           (cadr (assq 'type metadata))
+           ;;           (cadr (assq 'signature metadata))))
+           (with-input-from-file textfile
+             (lambda ()
+               (for-each-line (lambda (x) (display x) (newline))))))
           (else
            (error "No such identifier" name)))))
 (define (refresh-eggs)
   (for-each (lambda (x) (print x) (parse-egg x)) (directory +eggdir+)))
 
+;;; searching
+
+;; (change-directory "~/tmp/cdoc/root")
+;; (time (find-files "" directory? (lambda (path xs) (if (string=? "find-files" (pathname-file path)) (print path)))))  ;; 1.1 sec
+;; (time (define cache (find-files "" directory?)))
+;; (time (any (lambda (x) (if (string=? "find-files" (pathname-file x)) (print x) #f)) cache)) ;; 0.070 sec
+;; (time (any (lambda (x) (if (string=? "nonexistent" (pathname-file x)) (print x) #f)) cache)) ;; 0.171 sec
+;; hash key -> files? (or assq it)
+
+(define (add! path)
+  (let ((id (key->id (pathname-file path)))
+        ;; NB We don't really need to save the ID name in the value (since it is in the key)
+        (val (map key->id (string-split path "/"))))
+    (hash-table-update!/default key-cache id (lambda (old) (cons val old)) '())))
+
+(define (search id)
+  (for-each (lambda (x)
+              (print ;; (string-intersperse x "#")
+               x))
+            (hash-table-ref/default key-cache id '())))
+
+(change-directory "~/tmp/cdoc/root")
+(define cache (find-files "" directory?))
+(define key-cache (make-hash-table eq?))
+(for-each add! cache)
+(time (with-output-to-file "~/tmp/cdoc/key.idx" (lambda () (write (hash-table->alist key-cache)))))  ; .06 s
+(time (with-input-from-file "~/tmp/cdoc/key.idx" (lambda () (alist->hash-table (read)))))            ; .06 s
