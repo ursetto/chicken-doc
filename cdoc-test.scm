@@ -72,22 +72,22 @@
                  (write-tags tags tag-body path))
                #f)
               ((tag-line line) =>
-               ;; FIXME: Existing tag should be terminated unless the last line
-               ;; was also a tag.
                (match-lambda ((type sig id)
-                         ;;                          (print "type: " type " sig: " sig
-                         ;;                                 " id: " id)
+                         ;; NB Tag signatures are formatted and saved directly in
+                         ;; the tag body.  This preserves context (all grouped signatures
+                         ;; will appear when one is referenced), especially important
+                         ;; for identifiers with multiple valid signatures.
                          (cond ((eq? where 'tag-header)
                                 (loop (read-line) section #t (cons (list type sig id)
                                                                    tags)
-                                      tag-body
+                                      (cons (sprintf "~a: ~a" type sig) tag-body)
                                       where))
                                (else
                                 (when tag?
                                   (write-tags tags tag-body path))
                                 (loop (read-line) section #t (cons (list type sig id)
                                                                    '())
-                                      '()
+                                      (cons (sprintf "~a: ~a" type sig) '())
                                       'tag-header))))))
               ((section-line line) =>
                (match-lambda ((num title)
@@ -182,9 +182,10 @@
                 (regular-file? textfile)
                 (regular-file? metafile))
            (let ((metadata (with-input-from-file metafile read-file)))
-             (printf "~a: ~a\n"
-                     (cadr (assq 'type metadata))
-                     (cadr (assq 'signature metadata)))
+             ;; Now embedded in text body; no need to print sig
+;;              (printf "~a: ~a\n"
+;;                      (cadr (assq 'type metadata))
+;;                      (cadr (assq 'signature metadata)))
              (with-input-from-file textfile
                (lambda ()
                  (for-each-line (lambda (x) (display x) (newline)))))))
