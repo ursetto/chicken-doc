@@ -171,8 +171,10 @@
   (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))
           (directory (make-pathname (list (cdoc-root) name) #f))))
 (define (describe name)   ;; Test: print ,text and ,meta data for pathname
-  (let* ((name (if (pair? name) name (list name)))
-         (name (map ->string name))
+  (let* ((name (if (pair? name)
+                   name
+                   (string-split (->string name) "#")))
+         (name (map id->key name))
          (pathname (make-pathname (cons (cdoc-root) name) #f))
          (textfile (make-pathname pathname ",text"))
          (metafile (make-pathname pathname ",meta")))
