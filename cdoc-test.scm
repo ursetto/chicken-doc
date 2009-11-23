@@ -262,6 +262,7 @@
 
 ;; FIXME: Argument not actually a list path -- could also be a string path.
 ;; FIXME: Check describe contents of root
+;; FIXME: Gross ;)
 (define (describe-contents path)
   (for-each (lambda (x) (print (key->id x)
                           "\t\t"
@@ -272,7 +273,10 @@
 
 (define (refresh-id-cache)
   (change-directory "~/tmp/cdoc/root")
-  (for-each add! (find-files "" directory?))
+  (print "Rebuilding ID cache...")
+  (set! key-cache (make-hash-table eq?))
+  (time (for-each add! (find-files "" directory?)))
+  (print "Writing ID cache...")
   (time (with-output-to-file "~/tmp/cdoc/id.idx"
           (lambda () (write (hash-table->alist key-cache)))))) ; .06 s
 
