@@ -159,7 +159,7 @@
 
 (define (write-eggshell name)
   (write-key "This space intentionally left blank"
-             'egg name name '(".")))
+             'egg (string-append name " egg") name '(".")))
 (define (write-unitshell name id)
   (write-key "This space intentionally left blank"
              'unit name id '(".")))
@@ -253,14 +253,16 @@
 ;; E.g. cannot search for chicken#location, but (chicken location) or location ok.
 (define (search-and-describe id)
   (let ((entries (lookup id)))
-    (cond ((null? entries) (void))
+    (cond ((null? entries)
+           (void))
           ((null? (cdr entries))
            (print "path: " (car entries))
            (describe (car entries)))
           (else
-           (print "Found " (length entries) " matches:")
-           (for-each (lambda (x) (print x "     " (signature x)))
-                     entries)))))
+           (describe-matches entries)))))
+(define (search-only id)
+  (let ((entries (lookup id)))
+    (describe-signatures entries)))
 (define (list-keys name)  ;; Test: list keys (directories) under pathname
   (let ((key (path->keys name)))
     (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))
@@ -275,7 +277,12 @@
                           (signature (append path
                                              (list (key->id x))))))
             (list-keys path)))
-
+(define (describe-matches paths)
+  (print "Found " (length paths) " matches:")
+  (describe-signatures paths))
+(define (describe-signatures paths)   ; ((srfi-69 hash-table-ref) (synch synch) (posix))
+  (for-each (lambda (x) (print x "     " (signature x)))
+            paths))
 
 (define (refresh-id-cache)
   (change-directory "~/tmp/cdoc/root")
