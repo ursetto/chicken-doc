@@ -1,7 +1,9 @@
 ;;; cdoc-test
 
 (use matchable)
-(use irregex)
+(use regex)
+(use srfi-13)
+(use posix)
 
 (define +identifier-tags+
   (list "procedure" "macro" "read" "parameter"
@@ -180,15 +182,16 @@
 ;;; hilevel
 
 (use srfi-1)
+(define (path->keys path)
+  (map id->key (if (pair? path)
+                   path
+                   (string-split (->string path) "#"))))
 (define (list-keys name)  ;; Test: list keys (directories) under pathname
   (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))
           (directory (make-pathname (list (cdoc-root) name) #f))))
 (define (describe name)   ;; Test: print ,text and ,meta data for pathname
-  (let* ((name (if (pair? name)
-                   name
-                   (string-split (->string name) "#")))
-         (name (map id->key name))
-         (pathname (make-pathname (cons (cdoc-root) name) #f))
+  (let* ((key (path->keys name))
+         (pathname (make-pathname (cons (cdoc-root) key) #f))
          (textfile (make-pathname pathname ",text"))
          (metafile (make-pathname pathname ",meta")))
     (cond ((and (directory? pathname)
@@ -204,6 +207,18 @@
                (for-each-line (lambda (x) (display x) (newline))))))
           (else
            (error "No such identifier" name)))))
+;; FIXME: Perhaps abstract key field lookup.  E.g. lookup text, meta fields of keys
+(define (signature name)  ;; Return string representing signature
+  (let* ((key (path->keys name))
+         (pathname (make-pathname (cons (cdoc-root) key) #f))
+         (metafile (make-pathname pathname ",meta")))
+    (cond ((and (directory? pathname)
+                (regular-file? metafile))
+           (let ((metadata (with-input-from-file metafile read-file)))
+             (cadr (assq 'signature metadata))))
+          (else
+           (error "No such identifier" name)))))
+
 (define (refresh-eggs)
   (for-each (lambda (x) (print x) (parse-egg x)) (directory +eggdir+)))
 
@@ -216,21 +231,49 @@
 ;; (time (any (lambda (x) (if (string=? "nonexistent" (pathname-file x)) (print x) #f)) cache)) ;; 0.171 sec
 ;; hash key -> files? (or assq it)
 
+(define key-cache #f)
 (define (add! path)
   (let ((id (key->id (pathname-file path)))
         ;; NB We don't really need to save the ID name in the value (since it is in the key)
         (val (map key->id (string-split path "/"))))
     (hash-table-update!/default key-cache id (lambda (old) (cons val old)) '())))
 
+(define (lookup id)
+  (hash-table-ref/default key-cache id '()))
 (define (search id)
   (for-each (lambda (x)
               (print ;; (string-intersperse x "#")
                x))
-            (hash-table-ref/default key-cache id '())))
+            (lookup id)))
 
-(change-directory "~/tmp/cdoc/root")
-(define cache (find-files "" directory?))
-(define key-cache (make-hash-table eq?))
-(for-each add! cache)
-(time (with-output-to-file "~/tmp/cdoc/key.idx" (lambda () (write (hash-table->alist key-cache)))))  ; .06 s
-(time (with-input-from-file "~/tmp/cdoc/key.idx" (lambda () (alist->hash-table (read)))))            ; .06 s
+;; FIXME: Does not allow string path, just list path: probably a mistake.
+;; E.g. cannot search for chicken#location, but (chicken location) or location ok.
+(define (search-and-describe id)
+  (let ((entries (lookup id)))
+    (cond ((null? entries) (void))
+          ((null? (cdr entries))
+           (print "path: " (car entries))
+           (describe (car entries)))
+          (else
+           (print "Found " (length entries) " matches:")
+           (for-each (lambda (x) (print x))
+                     entries)))))
+
+
+(define (refresh-id-cache)
+  (change-directory "~/tmp/cdoc/root")
+  (for-each add! (find-files "" directory?))
+  (time (with-output-to-file "~/tmp/cdoc/id.idx"
+          (lambda () (write (hash-table->alist key-cache)))))) ; .06 s
+
+(define (read-id-cache)
+  (time (set! key-cache
+              (with-input-from-file "~/tmp/cdoc/id.idx"
+                (lambda () (alist->hash-table (read) eq?)))))) ; .06 s
+
+(define (init)
+  (read-id-cache)
+  (toplevel-command 'desc (lambda () (describe (read)))
+                    ",desc ID         Describe identifier ID using chicken-doc")
+  (toplevel-command 'doc (lambda () (search-and-describe (read)))
+                    ",doc ID          Search and describe identifier ID using chicken-doc"))
