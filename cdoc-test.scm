@@ -186,9 +186,6 @@
   (map id->key (if (pair? path)
                    path
                    (string-split (->string path) "#"))))
-(define (list-keys name)  ;; Test: list keys (directories) under pathname
-  (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))
-          (directory (make-pathname (list (cdoc-root) name) #f))))
 (define (describe name)   ;; Test: print ,text and ,meta data for pathname
   (let* ((key (path->keys name))
          (pathname (make-pathname (cons (cdoc-root) key) #f))
@@ -256,8 +253,21 @@
            (describe (car entries)))
           (else
            (print "Found " (length entries) " matches:")
-           (for-each (lambda (x) (print x))
+           (for-each (lambda (x) (print x "     " (signature x)))
                      entries)))))
+(define (list-keys name)  ;; Test: list keys (directories) under pathname
+  (let ((key (path->keys name)))
+    (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))
+            (directory (make-pathname (cons (cdoc-root) key) #f)))))
+
+;; FIXME: Argument not actually a list path -- could also be a string path.
+;; FIXME: Check describe contents of root
+(define (describe-contents path)
+  (for-each (lambda (x) (print (key->id x)
+                          "\t\t"
+                          (signature (append path
+                                             (list (key->id x))))))
+            (list-keys path)))
 
 
 (define (refresh-id-cache)
