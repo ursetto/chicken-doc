@@ -231,12 +231,18 @@
 (define key-cache #f)
 (define (add! path)
   (let ((id (key->id (pathname-file path)))
-        ;; NB We don't really need to save the ID name in the value (since it is in the key)
-        (val (map key->id (string-split path "/"))))
+        ;; We don't need to save the ID name in the value (since it is in the key)
+        (val (map key->id (butlast (string-split path "/")))))
     (hash-table-update!/default key-cache id (lambda (old) (cons val old)) '())))
 
 (define (lookup id)
-  (hash-table-ref/default key-cache id '()))
+  (define (lookup/raw id)
+    (hash-table-ref/default key-cache id #f))
+  ;; reconstruct full path by appending ID
+  (cond ((lookup/raw id) => (lambda (path)
+                              (map (lambda (x) (append x (list id)))
+                                   path)))
+        (else '())))
 (define (search id)
   (for-each (lambda (x)
               (print ;; (string-intersperse x "#")
@@ -281,9 +287,9 @@
           (lambda () (write (hash-table->alist key-cache)))))) ; .06 s
 
 (define (read-id-cache)
-  (time (set! key-cache
-              (with-input-from-file "~/tmp/cdoc/id.idx"
-                (lambda () (alist->hash-table (read) eq?)))))) ; .06 s
+  (set! key-cache
+        (with-input-from-file "~/tmp/cdoc/id.idx"
+          (lambda () (alist->hash-table (read) eq?))))) ; .06 s
 
 (define (init)
   (read-id-cache)
