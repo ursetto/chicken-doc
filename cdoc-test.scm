@@ -47,10 +47,8 @@
           (list num title))
          (#f #f)))
 
-;; (define (write-tags tags tag-body)
-;;    (printf "tags: ~S\n" tags)
-;;    (printf "tag-body: ~A\n" (string-concatenate-reverse
-;;                              (intersperse tag-body "\n"))))
+;; FIXME: Path is a list of directories (because that's what write-tag expects).
+;; This is broken, because write-tag does not escape them
 (define (write-tags tags tag-body path)
   (for-each (match-lambda ((type sig id)
                       (if id
@@ -61,9 +59,15 @@
                           )))
             (reverse tags)))
 
-;; FIXME: Path is a list of directories (because that's what write-tag expects).
-;; This is broken, because write-tag does not escape them
-(define (check-all fn path)
+
+;; Read and parse svnwiki format text file at pathname FN and
+;; write all tag groups using (WRITE-TAGS tags tag-body), where TAGS
+;; is a list of (type signature identifier) records, and TAG-BODY
+;; is a string containing the tag body for this tag group.  Additionally,
+;; a transformed wiki document will be written to port PARSED-OUT.
+;; (This API must change if the parsing gets any more complex.  We
+;;  would probably just return an SXML document.)
+(define (parse-and-write-tags/svnwiki fn write-tags parsed-out)
   (with-input-from-file fn
     (lambda ()
       (let loop ((line (read-line))
@@ -74,35 +78,41 @@
         (define (tag?) (pair? tags))
         (cond ((eof-object? line)
                (when (tag?)
-                 (write-tags tags tag-body path))
-               #f)
+                 (write-tags tags tag-body))
+               (void))
               ((tag-line line) =>
                (match-lambda ((type sig id)
                          ;; NB Tag signatures are formatted and saved directly in
                          ;; the tag body.  This preserves context (all grouped signatures
                          ;; will appear when one is referenced), especially important
                          ;; for identifiers with multiple valid signatures.
-                         (cond ((eq? where 'tag-header)
-                                (loop (read-line) section (cons (list type sig id)
-                                                                   tags)
-                                      (cons (sprintf "~a: ~a" type sig) tag-body)
-                                      where))
-                               (else
-                                (when (tag?)
-                                  (write-tags tags tag-body path))
-                                (loop (read-line) section (cons (list type sig id)
-                                                                   '())
-                                      (cons (sprintf "~a: ~a" type sig) '())
-                                      'tag-header))))))
+                         (let ((pretty-sig (sprintf "~a: ~a" type sig)))
+                           (display pretty-sig parsed-out)
+                           (newline parsed-out)
+                           (cond ((eq? where 'tag-header)
+                                  (loop (read-line) section (cons (list type sig id)
+                                                                  tags)
+                                        (cons pretty-sig tag-body)
+                                        where))
+                                 (else
+                                  (when (tag?)
+                                    (write-tags tags tag-body))
+                                  (loop (read-line) section (cons (list type sig id)
+                                                                  '())
+                                        (cons pretty-sig '())
+                                        'tag-header)))))))
               ((section-line line) =>
                (match-lambda ((num title)
-                         ;; (print "section: " num " title: " title)
+                         (display line parsed-out)
+                         (newline parsed-out)
                          (cond ((tag?)
-                                (write-tags tags tag-body path)
+                                (write-tags tags tag-body)
                                 (loop (read-line) section '() '() 'section))
                                (else
                                 (loop (read-line) section tags tag-body 'section))))))
               (else
+               (display line parsed-out)
+               (newline parsed-out)
                (if (tag?)
                    (loop (read-line) section tags (cons line tag-body) 'line)
                    (loop (read-line) section tags tag-body 'line)))
@@ -158,9 +168,18 @@
       (lambda ()
         (display text)))))
 
+;; This is a hack so we can open an output port to the
+;; text key, which is then passed to the parser to write
+;; a transformed wiki document.
+(define (open-output-text id path)
+  (and-let* ((key (id->key id)))
+    (open-output-file (make-pathname
+                       (append (list (cdoc-root))
+                               path (list key)) ",text"))))
+
 (define (write-eggshell name)
   (write-key "This space intentionally left blank"
-             'egg (string-append name " egg") name '(".")))
+             'egg (string-append name " egg") name '(".")))  ;; "." due to change-directory
 (define (write-unitshell name id)
   (write-key "This space intentionally left blank"
              'unit name id '(".")))
@@ -170,15 +189,22 @@
 (define +mandir+ (string-append +wikidir+ "/man/4"))
 (define (parse-egg name)
   (let ((fn (make-pathname +eggdir+ name))
-        (path (list name)))
+        (path (list name)))   ;; Possible FIXME (see write-tags)
     (write-eggshell name)
-    (check-all fn path)))
+    (let ((t (open-output-text name '())))
+      (parse-and-write-tags/svnwiki fn (lambda (tags body)
+                                         (write-tags tags body path))
+                                    t)
+      (close-output-port t))))
 (define (parse-unit name id)
   (let ((fn (make-pathname +mandir+ name))
         (path (list id)))
     (write-unitshell name id)
-    (check-all fn path)))
-
+    (let ((t (open-output-text id '())))
+      (parse-and-write-tags/svnwiki fn (lambda (tags body)
+                                         (write-tags tags body path))
+                                    t)
+      (close-output-port t))))
 
 ;;; hilevel
 
