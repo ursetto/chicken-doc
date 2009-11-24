@@ -61,17 +61,19 @@
                           )))
             (reverse tags)))
 
+;; FIXME: Path is a list of directories (because that's what write-tag expects).
+;; This is broken, because write-tag does not escape them
 (define (check-all fn path)
   (with-input-from-file fn
     (lambda ()
       (let loop ((line (read-line))
                  (section 1)
-                 (tag? #f)   ; remove in favor of (pair? tags)
                  (tags '())
                  (tag-body '())
                  (where 'section))
+        (define (tag?) (pair? tags))
         (cond ((eof-object? line)
-               (when tag?
+               (when (tag?)
                  (write-tags tags tag-body path))
                #f)
               ((tag-line line) =>
@@ -81,33 +83,32 @@
                          ;; will appear when one is referenced), especially important
                          ;; for identifiers with multiple valid signatures.
                          (cond ((eq? where 'tag-header)
-                                (loop (read-line) section #t (cons (list type sig id)
+                                (loop (read-line) section (cons (list type sig id)
                                                                    tags)
                                       (cons (sprintf "~a: ~a" type sig) tag-body)
                                       where))
                                (else
-                                (when tag?
+                                (when (tag?)
                                   (write-tags tags tag-body path))
-                                (loop (read-line) section #t (cons (list type sig id)
+                                (loop (read-line) section (cons (list type sig id)
                                                                    '())
                                       (cons (sprintf "~a: ~a" type sig) '())
                                       'tag-header))))))
               ((section-line line) =>
                (match-lambda ((num title)
                          ;; (print "section: " num " title: " title)
-                         (cond (tag?
+                         (cond ((tag?)
                                 (write-tags tags tag-body path)
-                                (loop (read-line) section #f '() '() 'section))
+                                (loop (read-line) section '() '() 'section))
                                (else
-                                (loop (read-line) section tag? tags tag-body 'section))))))
+                                (loop (read-line) section tags tag-body 'section))))))
               (else
-               (if tag?
-                   (loop (read-line) section tag? tags (cons line tag-body) 'line)
-                   (loop (read-line) section tag? tags tag-body 'line)))
+               (if (tag?)
+                   (loop (read-line) section tags (cons line tag-body) 'line)
+                   (loop (read-line) section tags tag-body 'line)))
               )))))
 
 
-;; (check-line "<procedure>(abc def)</procedure>")
 ;; (check-all "~/scheme/chicken-wiki/eggref/4/sql-de-lite" (list "sql-de-lite"))
 ;; (check-all "~/scheme/cdoc/sql-de-lite.wiki")
 ;; (check-all "~/scheme/chicken-wiki/man/4/Unit posix" (list "posix"))
