@@ -70,19 +70,6 @@
           (list num title))
          (#f #f)))
 
-;; FIXME: Path is a list of directories (because that's what write-tag expects).
-;; This is broken, because write-tag does not escape them
-(define (write-tags tags tag-body path)
-  (for-each (match-lambda ((type sig id)
-                      (if id
-                          (write-key (string-concatenate-reverse
-                                      (intersperse tag-body "\n"))
-                                     type sig id path)
-;;                           (warning "Skipped writing tag for signature" sig)
-                          )))
-            (reverse tags)))
-
-
 ;; Read and parse svnwiki format text file at pathname FN and
 ;; write all tag groups using (WRITE-TAGS tags tag-body), where TAGS
 ;; is a list of (type signature identifier) records, and TAG-BODY
@@ -200,9 +187,21 @@
       (lambda ()
         (display text)))))
 
+;; FIXME: Path is a list of directories (because that's what write-tag expects).
+;; This is broken, because write-tag does not escape them
+(define (write-tags tags tag-body path)
+  (for-each (match-lambda ((type sig id)
+                      (if id
+                          (write-key (string-concatenate-reverse
+                                      (intersperse tag-body "\n"))
+                                     type sig id path)
+;;                           (warning "Skipped writing tag for signature" sig)
+                          )))
+            (reverse tags)))
+
 ;; This is a hack so we can open an output port to the
 ;; text key, which is then passed to the parser to write
-;; a transformed wiki document.
+;; a transformed wiki document.  FIXME: make this less dumb.
 (define (open-output-text id path)
   (and-let* ((key (id->key id)))
     (open-output-file (make-pathname
