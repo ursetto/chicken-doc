@@ -14,7 +14,7 @@
          ;; I wonder if we need the signature, or just the path
 	 (search-only (string->symbol (cadr (command-line-arguments)))))
         ((string=? o "-c")
-         (describe-contents (map string->symbol (cdr (command-line-arguments)))))
+         (describe-children (map string->symbol (cdr (command-line-arguments)))))
         ((string=? o "-i")
          (describe (map string->symbol (cdr (command-line-arguments)))))
         (else

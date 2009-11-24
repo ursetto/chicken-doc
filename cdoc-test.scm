@@ -103,7 +103,8 @@
 
 (use srfi-1)
 (define (path->keys path)
-  (map id->key (if (pair? path)
+  (map id->key (if (or (null? path)
+                       (pair? path))
                    path
                    (string-split (->string path) "#"))))
 (define (keys->pathname keys)
@@ -118,22 +119,24 @@
     (lambda ()
       (for-each-line (lambda (x) (display x) (newline))))))
 
-(define (describe name)
-  (let* ((keys (path->keys name))
+;; Display the "text" field of PATH to current-output-port
+(define (describe path)
+  (let* ((keys (path->keys path))
          (textfile (keys+field->pathname keys 'text)))
     (cond ((and (file-exists? textfile))
            (cat textfile))   ;; (Signature is embedded in text body)
           (else
-           (error "No such identifier" name)))))
+           (error "No such identifier" path)))))
 
-(define (signature name)  ;; Return string representing signature
-  (let* ((keys (path->keys name))
+;; Return string representing signature of PATH
+(define (signature path)
+  (let* ((keys (path->keys path))
          (metafile (keys+field->pathname keys 'meta)))
     (cond ((and (file-exists? metafile))
            (let ((meta (with-input-from-file metafile read-file)))
              (cadr (assq 'signature meta))))
           (else
-           (error "No such identifier" name)))))
+           (error "No such identifier" path)))))
 
 (define (refresh-eggs)
   (for-each (lambda (x) (print x) (parse-egg x)) (directory +eggdir+)))
@@ -182,20 +185,25 @@
 (define (search-only id)
   (let ((entries (lookup id)))
     (describe-signatures entries)))
-(define (list-keys name)  ;; Test: list keys (directories) under pathname
-  (let ((key (path->keys name)))
-    (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))
-            (directory (make-pathname (cons (cdoc-root) key) #f)))))
+;; Return string list of child keys (directories) directly under PATH, or #f
+;; if the PATH is invalid.
+(define (child-keys path)
+  (let* ((keys (path->keys path))
+         (dir (keys->pathname keys)))
+    (and (directory? dir)
+         (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))
+                 (directory dir)))))
 
 ;; FIXME: Argument not actually a list path -- could also be a string path.
 ;; FIXME: Check describe contents of root
 ;; FIXME: Gross ;)
-(define (describe-contents path)
+(define (describe-children path)
   (for-each (lambda (x) (print (key->id x)
                           "\t\t"
                           (signature (append path
                                              (list (key->id x))))))
-            (list-keys path)))
+            (or (child-keys path)
+                (error "No such path" path))))
 (define (describe-matches paths)
   (print "Found " (length paths) " matches:")
   (describe-signatures paths))
