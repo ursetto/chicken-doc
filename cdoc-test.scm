@@ -23,6 +23,29 @@
                (* space)
                (submatch (+ any))
                eol)))
+(define +rx:code+
+  (irregex '(: "{{" (submatch (+ (~ "}")))
+               "}}")))
+(define +rx:link+
+  (irregex '(: "[[" (submatch (+ (~ "]|")))
+               "|"
+               (submatch (+ (~ "]|")))
+               "]]")))
+(define +rx:nondescript-link+
+  (irregex '(: "[[" (submatch (+ (~ "]")))
+               "]]")))
+(define +rx:wiki-command+
+  (irregex '(: bos "[[" (submatch (+ (~ "]:|")))
+               ":"
+               (submatch (* (~ "]:|")))
+               "]]")))
+(define +rx:enscript-either+
+  (irregex "</?enscript[^>]*>"))
+(define +rx:td-end+ (irregex '(or "</td>" "</th>")))
+(define +rx:tr-begin+ (irregex "<tr>"))
+(define +rx:deltable+
+  (irregex '(or "<td>" "<th>" "</tr>"
+                (: "<" (? "/") "table" (* (~ ">")) ">"))))
 
 ;; Convert signature (usually a list or bare identifier) into an identifier
 ;; At the moment, this just means taking the car of a list if it's a list,
@@ -111,11 +134,20 @@
                                (else
                                 (loop (read-line) section tags tag-body 'section))))))
               (else
-               (display line parsed-out)
-               (newline parsed-out)
-               (if (tag?)
-                   (loop (read-line) section tags (cons line tag-body) 'line)
-                   (loop (read-line) section tags tag-body 'line)))
+               ;; Q&D replacements; won't work across line break, but that is rare
+               (let* ((line (irregex-replace/all +rx:code+ line "`" 1 "`"))
+                      (line (irregex-replace/all +rx:link+ line 2 " (" 1 ")"))
+                      (line (irregex-replace/all +rx:wiki-command+ line ""))
+                      (line (irregex-replace/all +rx:nondescript-link+ line 1))
+                      (line (irregex-replace/all +rx:enscript-either+ line ""))
+                      (line (irregex-replace/all +rx:td-end+ line "\t| "))
+                      (line (irregex-replace/all +rx:tr-begin+ line "| "))
+                      (line (irregex-replace/all +rx:deltable+ line "")))
+                 (display line parsed-out)
+                 (newline parsed-out)
+                 (if (tag?)
+                     (loop (read-line) section tags (cons line tag-body) 'line)
+                     (loop (read-line) section tags tag-body 'line))))
               )))))
 
 
