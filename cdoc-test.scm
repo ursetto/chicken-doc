@@ -106,33 +106,32 @@
   (map id->key (if (pair? path)
                    path
                    (string-split (->string path) "#"))))
-(define (describe name)   ;; Test: print ,text and ,meta data for pathname
-  (let* ((key (path->keys name))
-         (pathname (make-pathname (cons (cdoc-root) key) #f))
-         (textfile (make-pathname pathname ",text"))
-         (metafile (make-pathname pathname ",meta")))
-    (cond ((and (directory? pathname)
-                (regular-file? textfile)
-                (regular-file? metafile))
-           ;; Now embedded in text body; no need to print sig
-           ;; (let ((metadata (with-input-from-file metafile read-file)))
-           ;;   (printf "~a: ~a\n"
-           ;;           (cadr (assq 'type metadata))
-           ;;           (cadr (assq 'signature metadata))))
-           (with-input-from-file textfile
-             (lambda ()
-               (for-each-line (lambda (x) (display x) (newline))))))
+(define (keys->pathname keys)
+  (make-pathname (cons (cdoc-root) keys) #f))
+(define (field-filename name)
+  (string-append "," (->string name)))
+(define (keys+field->pathname keys field)  ;; should this take a path instead of keys?
+  (make-pathname (keys->pathname keys)
+                 (field-filename field)))
+(define (cat file)
+  (with-input-from-file file
+    (lambda ()
+      (for-each-line (lambda (x) (display x) (newline))))))
+
+(define (describe name)
+  (let* ((keys (path->keys name))
+         (textfile (keys+field->pathname keys 'text)))
+    (cond ((and (file-exists? textfile))
+           (cat textfile))   ;; (Signature is embedded in text body)
           (else
            (error "No such identifier" name)))))
-;; FIXME: Perhaps abstract key field lookup.  E.g. lookup text, meta fields of keys
+
 (define (signature name)  ;; Return string representing signature
-  (let* ((key (path->keys name))
-         (pathname (make-pathname (cons (cdoc-root) key) #f))
-         (metafile (make-pathname pathname ",meta")))
-    (cond ((and (directory? pathname)
-                (regular-file? metafile))
-           (let ((metadata (with-input-from-file metafile read-file)))
-             (cadr (assq 'signature metadata))))
+  (let* ((keys (path->keys name))
+         (metafile (keys+field->pathname keys 'meta)))
+    (cond ((and (file-exists? metafile))
+           (let ((meta (with-input-from-file metafile read-file)))
+             (cadr (assq 'signature meta))))
           (else
            (error "No such identifier" name)))))
 
@@ -205,7 +204,7 @@
             paths))
 
 (define (refresh-id-cache)
-  (change-directory "~/tmp/cdoc/root")
+  (change-directory (cdoc-root))
   (print "Rebuilding ID cache...")
   (set! key-cache (make-hash-table eq?))
   (time (for-each add! (find-files "" directory?)))
