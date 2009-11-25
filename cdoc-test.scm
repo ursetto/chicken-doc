@@ -203,6 +203,7 @@
          ;; Again, we could use path->keys IF it did not convert strings.
          ;; As is, strings would be double-converted.  However, that is
          ;; dangerous because we do not want to write illegal characters to files.
+         ;; Thus we split the ID manually, relying on callee to convert to keys.
          (let ((id-strings (string-split (->string path) "#")))
            (if (or (null? id-strings)
                    (pair? (cdr id-strings)))

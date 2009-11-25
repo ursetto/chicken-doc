@@ -1,10 +1,16 @@
 #!/usr/bin/env csi4 -script
 
-;; extreme testing command line version
-
 (require-library cdoc-test)
 
+(define (usage)
+  (print "usage: " (program-name) " [-s|-f|-c|-i] path ...")
+  (exit))
+
 (init)
+
+(when (null? (command-line-arguments))
+  (usage))
+
 (let ((o (car (command-line-arguments))))
   (cond ((string=? o "-s")
          ;; 
@@ -18,8 +24,10 @@
         ((string=? o "-i")
          (describe (map string->symbol (cdr (command-line-arguments)))))
         (else
-         ;; Here, we should probably allow a full path or a lookup id, not just lookup id
-         (search-and-describe (string->symbol (car (command-line-arguments)))))))
+         (let ((ids (map string->symbol (command-line-arguments))))
+           (if (null? (cdr ids))
+               (repl-doc-dwim (car ids))
+               (repl-doc-dwim ids))))))
 
 
 
