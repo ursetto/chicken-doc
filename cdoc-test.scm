@@ -8,7 +8,14 @@
 (include "cdoc-parser.scm")
 (import chicken-doc-parser)
 
-(define cdoc-root (make-parameter "~/tmp/cdoc/root"))
+;; Config
+(define cdoc-base
+  (make-parameter "~/tmp/cdoc"))
+
+
+
+(define (cdoc-root)
+  (make-pathname (cdoc-base) "root"))
 (define +rx:%escape+ (irregex "[%/,]"))
 (define +rx:%unescape+ (irregex "%([0-9a-fA-F][0-9a-fA-F])"))
 (define (id->key id)
@@ -143,18 +150,12 @@
 
 ;;; searching
 
-;; (change-directory "~/tmp/cdoc/root")
-;; (time (find-files "" directory? (lambda (path xs) (if (string=? "find-files" (pathname-file path)) (print path)))))  ;; 1.1 sec
-;; (time (define cache (find-files "" directory?)))
-;; (time (any (lambda (x) (if (string=? "find-files" (pathname-file x)) (print x) #f)) cache)) ;; 0.070 sec
-;; (time (any (lambda (x) (if (string=? "nonexistent" (pathname-file x)) (print x) #f)) cache)) ;; 0.171 sec
-;; hash key -> files? (or assq it)
-
 (define key-cache #f)
+;; FIXME: 
 (define (add! path)
   (let ((id (key->id (pathname-file path)))
         ;; We don't need to save the ID name in the value (since it is in the key)
-        (val (map key->id (butlast (string-split path "/")))))
+        (val (map key->id (butlast (string-split path "/\\")))))   ;; hmm
     (hash-table-update!/default key-cache id (lambda (old) (cons val old)) '())))
 
 (define (lookup id)
@@ -194,9 +195,9 @@
          (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))
                  (directory dir)))))
 
-;; FIXME: Argument not actually a list path -- could also be a string path.
-;; FIXME: Check describe contents of root
-;; FIXME: Gross ;)
+;; Display the signature of all child keys of PATH, to stdout.
+;; NB: if we change path->keys to assume strings inside a path are already keys,
+;; we could avoid the key->id->key conversion in SIGNATURE.
 (define (describe-children path)
   (for-each (lambda (x) (print (key->id x)
                           "\t\t"
@@ -211,18 +212,19 @@
   (for-each (lambda (x) (print x "     " (signature x)))
             paths))
 
+(define (id-cache-filename)
+  (make-pathname (cdoc-base) "id.idx"))
 (define (refresh-id-cache)
   (change-directory (cdoc-root))
   (print "Rebuilding ID cache...")
   (set! key-cache (make-hash-table eq?))
   (time (for-each add! (find-files "" directory?)))
   (print "Writing ID cache...")
-  (time (with-output-to-file "~/tmp/cdoc/id.idx"
+  (time (with-output-to-file (id-cache-filename)
           (lambda () (write (hash-table->alist key-cache)))))) ; .06 s
-
 (define (read-id-cache)
   (set! key-cache
-        (with-input-from-file "~/tmp/cdoc/id.idx"
+        (with-input-from-file (id-cache-filename)
           (lambda () (alist->hash-table (read) eq?))))) ; .06 s
 
 (define (init)
