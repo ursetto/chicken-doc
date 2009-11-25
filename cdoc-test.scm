@@ -16,7 +16,7 @@
 
 (define (cdoc-root)
   (make-pathname (cdoc-base) "root"))
-(define +rx:%escape+ (irregex "[%/,]"))
+(define +rx:%escape+ (irregex "[%/,.]"))
 (define +rx:%unescape+ (irregex "%([0-9a-fA-F][0-9a-fA-F])"))
 (define (id->key id)
   (define (escape str)
@@ -152,10 +152,10 @@
 
 (define key-cache #f)
 ;; FIXME: 
-(define (add! path)
-  (let ((id (key->id (pathname-file path)))
+(define (add! pathname)
+  (let ((id (key->id (pathname-file pathname)))
         ;; We don't need to save the ID name in the value (since it is in the key)
-        (val (map key->id (butlast (string-split path "/\\")))))   ;; hmm
+        (val (map key->id (butlast (string-split pathname "/\\")))))   ;; hmm
     (hash-table-update!/default key-cache id (lambda (old) (cons val old)) '())))
 
 (define (lookup id)
@@ -192,8 +192,22 @@
   (let* ((keys (path->keys path))
          (dir (keys->pathname keys)))
     (and (directory? dir)
-         (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))
+         (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
                  (directory dir)))))
+
+(define (repl-doc-dwim path)
+  (cond ((or (null? path)
+             (pair? path))
+         (describe path))
+        (else
+         ;; Again, we could use path->keys IF it did not convert strings.
+         ;; As is, strings would be double-converted.  However, that is
+         ;; dangerous because we do not want to write illegal characters to files.
+         (let ((id-strings (string-split (->string path) "#")))
+           (if (or (null? id-strings)
+                   (pair? (cdr id-strings)))
+               (describe id-strings)
+               (search-and-describe (string->symbol (car id-strings))))))))
 
 ;; Display the signature of all child keys of PATH, to stdout.
 ;; NB: if we change path->keys to assume strings inside a path are already keys,
@@ -229,7 +243,7 @@
 
 (define (init)
   (read-id-cache)
-  (toplevel-command 'desc (lambda () (describe (read)))
-                    ",desc ID         Describe identifier ID using chicken-doc")
-  (toplevel-command 'doc (lambda () (search-and-describe (read)))
-                    ",doc ID          Search and describe identifier ID using chicken-doc"))
+;;   (toplevel-command 'desc (lambda () (describe (read)))
+;;                     ",desc ID         Describe identifier ID using chicken-doc")
+  (toplevel-command 'doc (lambda () (repl-doc-dwim (read)))
+                    ",doc ID          Describe identifier ID using chicken-doc"))
