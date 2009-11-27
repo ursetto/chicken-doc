@@ -41,20 +41,22 @@
 
 (define (write-key text type sig id path)
   (and-let* ((key (id->key id)))
-    (change-directory (cdoc-root))
-    (change-directory (make-pathname path #f))
-    (create-directory key)
-    (change-directory key)
-    (with-output-to-file ",meta"
-      (lambda ()
-        (for-each (lambda (x)
-                    (write x) (newline))
-                  `((type ,type)
-                    (signature ,sig)
-                    (identifier ,id)))))
-    (with-output-to-file ",text"
-      (lambda ()
-        (display text)))))
+    (with-global-write-lock
+     (lambda ()
+       (change-directory (cdoc-root))
+       (change-directory (make-pathname path #f))
+       (create-directory key)
+       (change-directory key)
+       (with-output-to-file ",meta"
+         (lambda ()
+           (for-each (lambda (x)
+                       (write x) (newline))
+                     `((type ,type)
+                       (signature ,sig)
+                       (identifier ,id)))))
+       (with-output-to-file ",text"
+         (lambda ()
+           (display text)))))))
 
 ;; FIXME: Path is a list of directories (because that's what write-tag expects).
 ;; This is broken, because write-tag does not escape them
@@ -90,21 +92,25 @@
 (define (parse-egg name)
   (let ((fn (make-pathname +eggdir+ name))
         (path (list name)))   ;; Possible FIXME (see write-tags)
-    (write-eggshell name)
-    (let ((t (open-output-text name '())))
-      (parse-and-write-tags/svnwiki fn (lambda (tags body)
-                                         (write-tags tags body path))
-                                    t)
-      (close-output-port t))))
+    (with-global-write-lock
+     (lambda ()
+       (write-eggshell name)
+       (let ((t (open-output-text name '())))
+         (parse-and-write-tags/svnwiki fn (lambda (tags body)
+                                            (write-tags tags body path))
+                                       t)
+         (close-output-port t))))))
 (define (parse-unit name id)
   (let ((fn (make-pathname +mandir+ name))
         (path (list id)))
-    (write-unitshell name id)
-    (let ((t (open-output-text id '())))
-      (parse-and-write-tags/svnwiki fn (lambda (tags body)
-                                         (write-tags tags body path))
-                                    t)
-      (close-output-port t))))
+    (with-global-write-lock
+     (lambda ()
+       (write-unitshell name id)
+       (let ((t (open-output-text id '())))
+         (parse-and-write-tags/svnwiki fn (lambda (tags body)
+                                            (write-tags tags body path))
+                                       t)
+         (close-output-port t))))))
 
 ;;; hilevel
 
@@ -146,7 +152,9 @@
            (error "No such identifier" path)))))
 
 (define (refresh-eggs)
-  (for-each (lambda (x) (print x) (parse-egg x)) (directory +eggdir+)))
+  (with-global-write-lock
+   (lambda ()
+     (for-each (lambda (x) (print x) (parse-egg x)) (directory +eggdir+)))))
 
 ;;; searching
 
@@ -230,17 +238,23 @@
 (define (id-cache-filename)
   (make-pathname (cdoc-base) "id.idx"))
 (define (refresh-id-cache)
-  (change-directory (cdoc-root))
-  (print "Rebuilding ID cache...")
-  (set! key-cache (make-hash-table eq?))
-  (time (for-each add! (find-files "" directory?)))
-  (print "Writing ID cache...")
-  (time (with-output-to-file (id-cache-filename)
-          (lambda () (write (hash-table->alist key-cache)))))) ; .06 s
+  (with-global-write-lock
+   (lambda ()
+     (change-directory (cdoc-root))
+     (print "Rebuilding ID cache...")
+     (set! key-cache (make-hash-table eq?))
+     (time (for-each add! (find-files "" directory?)))
+     (print "Writing ID cache...")
+     (let ((tmp-fn (make-pathname #f (id-cache-filename) ".tmp")))
+       (time (with-output-to-file tmp-fn
+               (lambda () (write (hash-table->alist key-cache)))))
+       (sleep 10)
+       (rename-file tmp-fn (id-cache-filename))))))
+
 (define (read-id-cache)
   (set! key-cache
         (with-input-from-file (id-cache-filename)
-          (lambda () (alist->hash-table (read) eq?))))) ; .06 s
+          (lambda () (alist->hash-table (read) eq?)))))
 
 (define (init)
   (read-id-cache)
@@ -248,3 +262,26 @@
 ;;                     ",desc ID         Describe identifier ID using chicken-doc")
   (toplevel-command 'doc (lambda () (repl-doc-dwim (read)))
                     ",doc ID          Describe identifier ID using chicken-doc"))
+
+
+;; NOT SRFI-18 safe
+(define global-write-lock (make-parameter #f))
+(define (acquire-global-write-lock!)
+  (when (global-write-lock)
+    ;; Not currently recursive.
+      (error "Already acquired global write lock"))
+  (let ((out (open-output-file (make-pathname (cdoc-base) "lock"))))
+    (file-lock/blocking out)
+    (global-write-lock out)))
+(define (release-global-write-lock!)
+  (unless (global-write-lock)
+    (error "Releasing unlocked write lock"))
+  (close-output-port (global-write-lock))
+  (global-write-lock #f))
+(define (with-global-write-lock thunk)
+  (cond ((global-write-lock)
+         (thunk))
+        (else    ; FIXME use handle-exceptions
+         (acquire-global-write-lock!)
+         (thunk)
+         (release-global-write-lock!))))
