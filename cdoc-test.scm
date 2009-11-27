@@ -323,6 +323,6 @@
 
 (define repl-doc-dwim doc-dwim)
 
-(define (init-repl)
+(when (feature? 'csi)
   (toplevel-command 'doc (lambda () (repl-doc-dwim (read)))
-                    ",doc ID          Describe identifier ID using chicken-doc"))
+                    ",doc PATH         Describe identifier or path with chicken-doc"))
