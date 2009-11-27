@@ -248,7 +248,6 @@
      (let ((tmp-fn (make-pathname #f (id-cache-filename) ".tmp")))
        (time (with-output-to-file tmp-fn
                (lambda () (write (hash-table->alist key-cache)))))
-       (sleep 10)
        (rename-file tmp-fn (id-cache-filename))))))
 
 (define (read-id-cache)
@@ -264,7 +263,7 @@
                     ",doc ID          Describe identifier ID using chicken-doc"))
 
 
-;; NOT SRFI-18 safe
+;; NOT SRFI-18 safe (multiple in-process locks don't block).
 (define global-write-lock (make-parameter #f))
 (define (acquire-global-write-lock!)
   (when (global-write-lock)
@@ -283,5 +282,8 @@
          (thunk))
         (else    ; FIXME use handle-exceptions
          (acquire-global-write-lock!)
-         (thunk)
-         (release-global-write-lock!))))
+         (handle-exceptions exn (begin
+                                  (release-global-write-lock!)
+                                  (signal exn))
+           (thunk)
+           (release-global-write-lock!)))))
