@@ -9,13 +9,52 @@
 (import chicken-doc-parser)
 
 ;;; Config
+
 (define cdoc-base
   (make-parameter "~/tmp/cdoc"))
+
+;;; Util
+
+(define (with-cwd dir thunk)          ;; FIXME: dynamic-wind
+  (let ((old (current-directory)))
+    (current-directory dir)
+    (handle-exceptions exn (begin (current-directory old)
+                                  (signal exn))
+      (thunk)
+      (current-directory old))))
+
+;;; Locking
+
+;; NOT SRFI-18 safe (multiple in-process locks don't block).
+(define global-write-lock (make-parameter #f))
+(define (acquire-global-write-lock!)
+  (when (global-write-lock)
+    ;; Not currently recursive.
+      (error "Already acquired global write lock"))
+  (let ((out (open-output-file (make-pathname (cdoc-base) "lock"))))
+    (file-lock/blocking out)
+    (global-write-lock out)))
+(define (release-global-write-lock!)
+  (unless (global-write-lock)
+    (error "Releasing unlocked write lock"))
+  (close-output-port (global-write-lock))
+  (global-write-lock #f))
+(define (with-global-write-lock thunk)
+  (cond ((global-write-lock)
+         (thunk))
+        (else    ; FIXME use handle-exceptions
+         (acquire-global-write-lock!)
+         (handle-exceptions exn (begin
+                                  (release-global-write-lock!)
+                                  (signal exn))
+           (thunk)
+           (release-global-write-lock!)))))
 
 ;;; rest
 
 (define (cdoc-root)
   (make-pathname (cdoc-base) "root"))
+
 (define +rx:%escape+ (irregex "[%/,.]"))
 (define +rx:%unescape+ (irregex "%([0-9a-fA-F][0-9a-fA-F])"))
 (define (id->key id)
@@ -59,6 +98,8 @@
           (with-output-to-file ",text"
             (lambda ()
               (display text)))))))))
+
+;;; Hilevel parsing (units, eggs)
 
 ;; FIXME: Path is a list of directories (because that's what write-tag expects).
 ;; This is broken, because write-tag does not escape them
@@ -114,7 +155,12 @@
                                        t)
          (close-output-port t))))))
 
-;;; hilevel
+(define (refresh-eggs)
+  (with-global-write-lock
+   (lambda ()
+     (for-each (lambda (x) (print x) (parse-egg x)) (directory +eggdir+)))))
+
+;;; Nebulous section name
 
 (use srfi-1)
 (define (path->keys path)
@@ -129,6 +175,29 @@
 (define (keys+field->pathname keys field)  ;; should this take a path instead of keys?
   (make-pathname (keys->pathname keys)
                  (field-filename field)))
+
+;; Return string list of child keys (directories) directly under PATH, or #f
+;; if the PATH is invalid.
+(define (child-keys path)
+  (let* ((keys (path->keys path))
+         (dir (keys->pathname keys)))
+    (and (directory? dir)
+         (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
+                 (directory dir)))))
+
+;; Return string representing signature of PATH
+(define (signature path)
+  (let* ((keys (path->keys path))
+         (metafile (keys+field->pathname keys 'meta)))
+    (cond ((and (file-exists? metafile))
+           (let ((meta (with-input-from-file metafile read-file)))
+             (cadr (assq 'signature meta))))
+          (else
+           (error "No such identifier" path)))))
+
+;;; Describe
+
+;; Display file to stdout
 (define (cat file)
   (with-input-from-file file
     (lambda ()
@@ -143,22 +212,25 @@
           (else
            (error "No such identifier" path)))))
 
-;; Return string representing signature of PATH
-(define (signature path)
-  (let* ((keys (path->keys path))
-         (metafile (keys+field->pathname keys 'meta)))
-    (cond ((and (file-exists? metafile))
-           (let ((meta (with-input-from-file metafile read-file)))
-             (cadr (assq 'signature meta))))
-          (else
-           (error "No such identifier" path)))))
+;; Display the signature of all child keys of PATH, to stdout.
+;; NB: if we change path->keys to assume strings inside a path are already keys,
+;; we could avoid the key->id->key conversion in SIGNATURE.
+(define (describe-children path)
+  (for-each (lambda (x) (print (key->id x)
+                          "\t\t"
+                          (signature (append path
+                                             (list (key->id x))))))
+            (or (child-keys path)
+                (error "No such path" path))))
 
-(define (refresh-eggs)
-  (with-global-write-lock
-   (lambda ()
-     (for-each (lambda (x) (print x) (parse-egg x)) (directory +eggdir+)))))
+(define (describe-signatures paths)   ; ((srfi-69 hash-table-ref) (synch synch) (posix))
+  (for-each (lambda (x) (print x "     " (signature x)))
+            paths))
+(define (describe-matches paths)
+  (print "Found " (length paths) " matches:")
+  (describe-signatures paths))
 
-;;; searching
+;;; ID search cache
 
 (define id-cache
   (make-parameter #f))
@@ -171,94 +243,16 @@
         ;; We don't save the ID name in the value (since it is in the key)
         (val (map key->id (butlast (string-split pathname "/\\")))))   ;; hmm
     (hash-table-update!/default (id-cache) id (lambda (old) (cons val old)) '())))
-
-(define (lookup id)
-  (define (lookup/raw id)
-    (hash-table-ref/default (id-cache) id #f))
-  ;; reconstruct full path by appending ID
-  (validate-id-cache!)
-  (cond ((lookup/raw id) => (lambda (path)
-                              (map (lambda (x) (append x (list id)))
-                                   path)))
-        (else '())))
-(define (search id)
-  (for-each (lambda (x)
-              (print ;; (string-intersperse x "#")
-               x))
-            (lookup id)))
-
-;; FIXME: Does not allow string path, just list path: probably a mistake.
-;; E.g. cannot search for chicken#location, but (chicken location) or location ok.
-(define (search-and-describe id)
-  (let ((entries (lookup id)))
-    (cond ((null? entries)
-           (void))
-          ((null? (cdr entries))
-           (print "path: " (car entries))
-           (describe (car entries)))
-          (else
-           (describe-matches entries)))))
-(define (search-only id)
-  (let ((entries (lookup id)))
-    (describe-signatures entries)))
-;; Return string list of child keys (directories) directly under PATH, or #f
-;; if the PATH is invalid.
-(define (child-keys path)
-  (let* ((keys (path->keys path))
-         (dir (keys->pathname keys)))
-    (and (directory? dir)
-         (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
-                 (directory dir)))))
-
-(define (repl-doc-dwim path)
-  (cond ((or (null? path)
-             (pair? path))
-         (describe path))
-        (else
-         ;; Again, we could use path->keys IF it did not convert strings.
-         ;; As is, strings would be double-converted.  However, that is
-         ;; dangerous because we do not want to write illegal characters to files.
-         ;; Thus we split the ID manually, relying on callee to convert to keys.
-         (let ((id-strings (string-split (->string path) "#")))
-           (if (or (null? id-strings)
-                   (pair? (cdr id-strings)))
-               (describe id-strings)
-               (search-and-describe (string->symbol (car id-strings))))))))
-
-;; Display the signature of all child keys of PATH, to stdout.
-;; NB: if we change path->keys to assume strings inside a path are already keys,
-;; we could avoid the key->id->key conversion in SIGNATURE.
-(define (describe-children path)
-  (for-each (lambda (x) (print (key->id x)
-                          "\t\t"
-                          (signature (append path
-                                             (list (key->id x))))))
-            (or (child-keys path)
-                (error "No such path" path))))
-(define (describe-matches paths)
-  (print "Found " (length paths) " matches:")
-  (describe-signatures paths))
-(define (describe-signatures paths)   ; ((srfi-69 hash-table-ref) (synch synch) (posix))
-  (for-each (lambda (x) (print x "     " (signature x)))
-            paths))
-
-(define (with-cwd dir thunk)          ;; FIXME: dynamic-wind
-  (let ((old (current-directory)))
-    (current-directory dir)
-    (handle-exceptions exn (begin (current-directory old)
-                                  (signal exn))
-      (thunk)
-      (current-directory old))))
-(define (validate-id-cache!)
-  (when (< (id-cache-mtime)
-           (file-modification-time (id-cache-filename)))
-    (read-id-cache)))
-(define (read-id-cache)
+(define (read-id-cache!)
   (id-cache
    (call-with-input-file (id-cache-filename)
      (lambda (in)
        (id-cache-mtime (file-modification-time (port->fileno in)))
        (alist->hash-table (read in) eq?)))))
+(define (validate-id-cache!)
+  (when (< (id-cache-mtime)
+           (file-modification-time (id-cache-filename)))
+    (read-id-cache!)))
 (define (write-id-cache!)
   (let ((tmp-fn (make-pathname #f (id-cache-filename) ".tmp")))
     (with-output-to-file tmp-fn
@@ -276,37 +270,59 @@
                  (id-cache (make-hash-table eq?))
                  (for-each id-cache-add-directory!
                            (find-files "" directory?))))
-     (print "Writing ID cache...")
+;;      (print "Writing ID cache...")
      (write-id-cache!))))
 
-(define (init)
-;;   (read-id-cache)
+;;; ID search
+
+(define (lookup id)
+  (define (lookup/raw id)
+    (hash-table-ref/default (id-cache) id #f))
+  (validate-id-cache!)
+  (cond ((lookup/raw id) => (lambda (path)
+                              ;; reconstruct full path by appending ID
+                              (map (lambda (x) (append x (list id)))
+                                   path)))
+        (else '())))
+
+;; (define (search id)
+;;   (for-each (lambda (x)
+;;               (print ;; (string-intersperse x "#")
+;;                x))
+;;             (lookup id)))
+
+(define (search-and-describe id)
+  (let ((entries (lookup id)))
+    (cond ((null? entries)
+           (void))
+          ((null? (cdr entries))
+           (print "path: " (car entries))
+           (describe (car entries)))
+          (else
+           (describe-matches entries)))))
+(define (search-only id)
+  (let ((entries (lookup id)))
+    (describe-signatures entries)))
+
+(define (doc-dwim path)
+  (cond ((or (null? path)
+             (pair? path))
+         (describe path))
+        (else
+         ;; Again, we could use path->keys IF it did not convert strings.
+         ;; As is, strings would be double-converted.  However, that is
+         ;; dangerous because we do not want to write illegal characters to files.
+         ;; Thus we split the ID manually, relying on callee to convert to keys.
+         (let ((id-strings (string-split (->string path) "#")))
+           (if (or (null? id-strings)
+                   (pair? (cdr id-strings)))
+               (describe id-strings)
+               (search-and-describe (string->symbol (car id-strings))))))))
+
+;;; REPL
+
+(define repl-doc-dwim doc-dwim)
+
+(define (init-repl)
   (toplevel-command 'doc (lambda () (repl-doc-dwim (read)))
                     ",doc ID          Describe identifier ID using chicken-doc"))
-
-;;; Locking
-
-;; NOT SRFI-18 safe (multiple in-process locks don't block).
-(define global-write-lock (make-parameter #f))
-(define (acquire-global-write-lock!)
-  (when (global-write-lock)
-    ;; Not currently recursive.
-      (error "Already acquired global write lock"))
-  (let ((out (open-output-file (make-pathname (cdoc-base) "lock"))))
-    (file-lock/blocking out)
-    (global-write-lock out)))
-(define (release-global-write-lock!)
-  (unless (global-write-lock)
-    (error "Releasing unlocked write lock"))
-  (close-output-port (global-write-lock))
-  (global-write-lock #f))
-(define (with-global-write-lock thunk)
-  (cond ((global-write-lock)
-         (thunk))
-        (else    ; FIXME use handle-exceptions
-         (acquire-global-write-lock!)
-         (handle-exceptions exn (begin
-                                  (release-global-write-lock!)
-                                  (signal exn))
-           (thunk)
-           (release-global-write-lock!)))))

@@ -26,8 +26,8 @@
         (else
          (let ((ids (map string->symbol (command-line-arguments))))
            (if (null? (cdr ids))
-               (repl-doc-dwim (car ids))
-               (repl-doc-dwim ids))))))
+               (doc-dwim (car ids))
+               (doc-dwim ids))))))
 
 
 
