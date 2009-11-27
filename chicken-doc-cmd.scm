@@ -1,6 +1,6 @@
 #!/usr/bin/env csi4 -script
 
-(require-library cdoc-test)
+(require-library chicken-doc)
 
 (define (usage)
   (print "usage: " (program-name) " [-s|-f|-c|-i] path ...")
