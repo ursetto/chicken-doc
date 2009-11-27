@@ -6,7 +6,7 @@
   (print "usage: " (program-name) " [-s|-f|-c|-i] path ...")
   (exit))
 
-(init)
+;; (init)
 
 (when (null? (command-line-arguments))
   (usage))

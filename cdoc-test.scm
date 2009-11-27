@@ -8,11 +8,11 @@
 (include "cdoc-parser.scm")
 (import chicken-doc-parser)
 
-;; Config
+;;; Config
 (define cdoc-base
   (make-parameter "~/tmp/cdoc"))
 
-
+;;; rest
 
 (define (cdoc-root)
   (make-pathname (cdoc-base) "root"))
@@ -43,20 +43,22 @@
   (and-let* ((key (id->key id)))
     (with-global-write-lock
      (lambda ()
-       (change-directory (cdoc-root))
-       (change-directory (make-pathname path #f))
-       (create-directory key)
-       (change-directory key)
-       (with-output-to-file ",meta"
-         (lambda ()
-           (for-each (lambda (x)
-                       (write x) (newline))
-                     `((type ,type)
-                       (signature ,sig)
-                       (identifier ,id)))))
-       (with-output-to-file ",text"
-         (lambda ()
-           (display text)))))))
+       (with-cwd
+        (cdoc-root)
+        (lambda ()
+          (change-directory (make-pathname path #f))
+          (create-directory key)       ;; silently ignore if exists
+          (change-directory key)
+          (with-output-to-file ",meta"
+            (lambda ()
+              (for-each (lambda (x)
+                          (write x) (newline))
+                        `((type ,type)
+                          (signature ,sig)
+                          (identifier ,id)))))
+          (with-output-to-file ",text"
+            (lambda ()
+              (display text)))))))))
 
 ;; FIXME: Path is a list of directories (because that's what write-tag expects).
 ;; This is broken, because write-tag does not escape them
@@ -158,18 +160,23 @@
 
 ;;; searching
 
-(define key-cache #f)
-;; FIXME: 
-(define (add! pathname)
+(define id-cache
+  (make-parameter #f))
+(define (id-cache-filename)
+  (make-pathname (cdoc-base) "id.idx"))
+(define id-cache-mtime
+  (make-parameter 0))
+(define (id-cache-add-directory! pathname)
   (let ((id (key->id (pathname-file pathname)))
-        ;; We don't need to save the ID name in the value (since it is in the key)
+        ;; We don't save the ID name in the value (since it is in the key)
         (val (map key->id (butlast (string-split pathname "/\\")))))   ;; hmm
-    (hash-table-update!/default key-cache id (lambda (old) (cons val old)) '())))
+    (hash-table-update!/default (id-cache) id (lambda (old) (cons val old)) '())))
 
 (define (lookup id)
   (define (lookup/raw id)
-    (hash-table-ref/default key-cache id #f))
+    (hash-table-ref/default (id-cache) id #f))
   ;; reconstruct full path by appending ID
+  (validate-id-cache!)
   (cond ((lookup/raw id) => (lambda (path)
                               (map (lambda (x) (append x (list id)))
                                    path)))
@@ -235,33 +242,49 @@
   (for-each (lambda (x) (print x "     " (signature x)))
             paths))
 
-(define (id-cache-filename)
-  (make-pathname (cdoc-base) "id.idx"))
+(define (with-cwd dir thunk)          ;; FIXME: dynamic-wind
+  (let ((old (current-directory)))
+    (current-directory dir)
+    (handle-exceptions exn (begin (current-directory old)
+                                  (signal exn))
+      (thunk)
+      (current-directory old))))
+(define (validate-id-cache!)
+  (when (< (id-cache-mtime)
+           (file-modification-time (id-cache-filename)))
+    (read-id-cache)))
+(define (read-id-cache)
+  (id-cache
+   (call-with-input-file (id-cache-filename)
+     (lambda (in)
+       (id-cache-mtime (file-modification-time (port->fileno in)))
+       (alist->hash-table (read in) eq?)))))
+(define (write-id-cache!)
+  (let ((tmp-fn (make-pathname #f (id-cache-filename) ".tmp")))
+    (with-output-to-file tmp-fn
+      (lambda () (write (hash-table->alist (id-cache)))))
+    (rename-file tmp-fn (id-cache-filename))
+    (id-cache-mtime (current-seconds)
+                    ;; (file-modification-time (id-cache-filename))
+                    )))
 (define (refresh-id-cache)
   (with-global-write-lock
    (lambda ()
-     (change-directory (cdoc-root))
      (print "Rebuilding ID cache...")
-     (set! key-cache (make-hash-table eq?))
-     (time (for-each add! (find-files "" directory?)))
+     (with-cwd (cdoc-root)
+               (lambda ()
+                 (id-cache (make-hash-table eq?))
+                 (for-each id-cache-add-directory!
+                           (find-files "" directory?))))
      (print "Writing ID cache...")
-     (let ((tmp-fn (make-pathname #f (id-cache-filename) ".tmp")))
-       (time (with-output-to-file tmp-fn
-               (lambda () (write (hash-table->alist key-cache)))))
-       (rename-file tmp-fn (id-cache-filename))))))
-
-(define (read-id-cache)
-  (set! key-cache
-        (with-input-from-file (id-cache-filename)
-          (lambda () (alist->hash-table (read) eq?)))))
+     (write-id-cache!))))
 
 (define (init)
-  (read-id-cache)
-;;   (toplevel-command 'desc (lambda () (describe (read)))
-;;                     ",desc ID         Describe identifier ID using chicken-doc")
+;;   (read-id-cache)
   (toplevel-command 'doc (lambda () (repl-doc-dwim (read)))
                     ",doc ID          Describe identifier ID using chicken-doc"))
 
+;;; Locking
 
 ;; NOT SRFI-18 safe (multiple in-process locks don't block).
 (define global-write-lock (make-parameter #f))
