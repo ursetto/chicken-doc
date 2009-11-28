@@ -11,6 +11,11 @@
 (when (null? (command-line-arguments))
   (usage))
 
+(unless (verify-repository)
+  (fprintf (current-error-port) "No repository found at ~a\n"
+           (cdoc-base))
+  (exit 1))
+
 (let ((o (car (command-line-arguments))))
   (cond ((string=? o "-s")
          ;; 

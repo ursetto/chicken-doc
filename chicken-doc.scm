@@ -1,4 +1,8 @@
-;;; cdoc-test
+;;; chicken-doc
+
+;; FIXME: Quite a few things are exported for chicken-doc-admin's use only
+;; such as id->key.  Furthermore even certain regular things shouldn't
+;; be exported to the REPL.
 
 (use matchable)
 (use regex)
@@ -9,7 +13,12 @@
 ;;; Config
 
 (define cdoc-base
-  (make-parameter "~/tmp/cdoc"))
+  (make-parameter #f))
+
+(define (locate-repository)
+  (or (getenv "CHICKEN_DOC_REPOSITORY")
+      (make-pathname (chicken-home) "chicken-doc")))
+(cdoc-base (locate-repository))
 
 ;;; Util
 
@@ -189,6 +198,21 @@
                    (pair? (cdr id-strings)))
                (describe id-strings)
                (search-and-describe (string->symbol (car id-strings))))))))
+
+;;; Repository
+
+(define-constant repo-version 1)
+(define repository-information (make-parameter '()))
+(define (repo-magic)
+  (make-pathname (cdoc-base) ".chicken-doc-repo"))
+(define (verify-repository)
+  (and (file-exists? (repo-magic))
+       (let ((repo-info (with-input-from-file (repo-magic) read)))
+         (repository-information repo-info)
+         (let ((version (or (alist-ref 'version repo-info) 0)))
+           (cond ((= version repo-version))
+                 (else (fprintf (current-error-port) "Invalid repo version number ~a\n" version)
+                       #f))))))
 
 ;;; REPL
 

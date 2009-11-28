@@ -54,6 +54,21 @@
             (lambda ()
               (display text)))))))))
 
+;;; Repo manipulation
+
+(define (create-repository!)
+  ;; FIXME: initialization should not occur if the version is wrong
+  (when (file-exists? (repo-magic))
+    (error "Repository already exists at" (cdoc-base)))
+  (create-directory (cdoc-base))
+  (create-directory (cdoc-root))
+  (with-output-to-file (repo-magic)
+    (lambda () (pp `((version . ,repo-version))))))
+(define (describe-repository)
+;;   (print "Repository information:")
+  (pp (cons `(location . ,(cdoc-base))
+            (repository-information))))
+
 ;;; Hilevel parsing (units, eggs)
 
 ;; FIXME: Path is a list of directories (because that's what write-tag expects).
@@ -118,7 +133,7 @@
 ;;; ID search cache (write)
 
 (define (write-id-cache!)
-  (let ((tmp-fn (make-pathname #f (id-cache-filename) ".tmp")))
+  (let ((tmp-fn (string-append (id-cache-filename) ".tmp")))
     (with-output-to-file tmp-fn
       (lambda () (write (hash-table->alist (id-cache)))))
     (rename-file tmp-fn (id-cache-filename))
@@ -128,7 +143,6 @@
 (define (refresh-id-cache)
   (with-global-write-lock
    (lambda ()
-     (print "Rebuilding ID cache...")
      (with-cwd (cdoc-root)
                (lambda ()
                  (id-cache (make-hash-table eq?))
