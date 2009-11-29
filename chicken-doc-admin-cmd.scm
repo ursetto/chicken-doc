@@ -42,5 +42,8 @@
                ((string=? o "-E")
                 (unless (pair? r) (usage))
                 (parse-individual-egg (car r) 'svnwiki))
+               ((string=? o "-M")
+                (unless (pair? r) (usage))
+                (parse-individual-man (car r) 'svnwiki))
                (else
                 (usage))))))

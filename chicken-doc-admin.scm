@@ -121,7 +121,7 @@
   (let ((name (last path)))
     (write-key path #f 'egg
                (string-append name " egg"))))
-(define (write-unitshell path name)
+(define (write-manshell path name)
   (write-key path #f 'unit name))
 
 ;; (define +wikidir+ "~/scheme/chicken-wiki")
@@ -140,10 +140,10 @@
                                      t)
        (close-output-port t)))))
 
-(define (parse-unit fn path name)
+(define (parse-man fn path name)
   (with-global-write-lock
    (lambda ()
-     (write-unitshell path name)
+     (write-manshell path name)
      (let ((t (open-output-text path)))
        (parse-and-write-tags/svnwiki fn (lambda (tags body)
                                           (write-tags tags body path))
@@ -156,29 +156,6 @@
   type ;ignored
   (let ((name (pathname-file pathname)))
     (parse-egg pathname `(,name))))
-
-(define (parse-egg-directory dir type)
-  type ;ignored -- e.g. 'svnwiki
-  (with-global-write-lock
-   (lambda ()
-     (for-each (lambda (name)
-                 (print name)
-                 (parse-egg (make-pathname dir name)
-                            `(,name)))
-               (directory dir))
-     (refresh-id-cache))))
-
-(define (parse-man-directory dir type)
-  type ;ignored
-  (with-global-write-lock
-   (lambda ()
-     (for-each (lambda (fn)
-                 (and-let* ((path (man-filename->path fn)))
-                   (print fn)
-                   (parse-unit (make-pathname dir fn)
-                               path fn)))
-               (directory dir))
-     (refresh-id-cache))))
 
 (define man-filename->path
   (let ((re:unit (irregex "^Unit (.*)"))
@@ -220,6 +197,32 @@
              ((string=? t "Using the interpreter")
               '(csi))
              (else #f))))))
+
+(define (parse-egg-directory dir type)
+  type ;ignored -- e.g. 'svnwiki
+  (with-global-write-lock
+   (lambda ()
+     (for-each (lambda (name)
+                 (parse-individual-egg (make-pathname dir name) 'svnwiki)
+                 (print name))
+               (directory dir))
+     (refresh-id-cache))))
+
+(define (parse-individual-man pathname type)
+  type ;ignored
+  (let ((name (pathname-file pathname)))
+    (and-let* ((path (man-filename->path name)))
+      (parse-man pathname path name))))
+
+(define (parse-man-directory dir type)
+  type ;ignored
+  (with-global-write-lock
+   (lambda ()
+     (for-each (lambda (name)
+                 (when (parse-individual-man (make-pathname dir name) 'svnwiki)
+                   (print name)))
+               (directory dir))
+     (refresh-id-cache))))
 
 ;;; ID search cache (write)
 
