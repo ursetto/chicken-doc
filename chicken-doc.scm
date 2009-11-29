@@ -12,13 +12,13 @@
 
 ;;; Config
 
-(define cdoc-base
+(define repository-base
   (make-parameter #f))
 
 (define (locate-repository)
   (or (getenv "CHICKEN_DOC_REPOSITORY")
       (make-pathname (chicken-home) "chicken-doc")))
-(cdoc-base (locate-repository))
+(repository-base (locate-repository))
 
 ;;; Util
 
@@ -33,7 +33,7 @@
 ;;; Lowlevel
 
 (define (cdoc-root)
-  (make-pathname (cdoc-base) "root"))
+  (make-pathname (repository-base) "root"))
 
 (define +rx:%escape+ (irregex "[%/,.]"))
 (define +rx:%unescape+ (irregex "%([0-9a-fA-F][0-9a-fA-F])"))
@@ -140,7 +140,7 @@
 (define id-cache
   (make-parameter #f))
 (define (id-cache-filename)
-  (make-pathname (cdoc-base) "id.idx"))
+  (make-pathname (repository-base) "id.idx"))
 (define id-cache-mtime
   (make-parameter 0))
 (define (id-cache-add-directory! pathname)
@@ -158,6 +158,8 @@
   (when (< (id-cache-mtime)
            (file-modification-time (id-cache-filename)))
     (read-id-cache!)))
+(define (invalidate-id-cache!)
+  (id-cache-mtime 0))
 
 ;;; ID search
 
@@ -207,10 +209,10 @@
 
 ;;; Repository
 
-(define-constant repo-version 1)
+(define repo-version 1)
 (define repository-information (make-parameter '()))
 (define (repo-magic)
-  (make-pathname (cdoc-base) ".chicken-doc-repo"))
+  (make-pathname (repository-base) ".chicken-doc-repo"))
 (define (verify-repository)
   (and (file-exists? (repo-magic))
        (let ((repo-info (with-input-from-file (repo-magic) read)))
@@ -219,11 +221,18 @@
            (cond ((= version repo-version))
                  (else (fprintf (current-error-port) "Invalid repo version number ~a\n" version)
                        #f))))))
+(define (set-chicken-doc-repository! x)
+  (invalidate-id-cache!)
+  (repository-base x)
+  (unless (verify-repository)
+    (warning "No chicken-doc repository found at" (repository-base))))
 
 ;;; REPL
 
 (define repl-doc-dwim doc-dwim)
 
 (when (feature? 'csi)
+  (set-chicken-doc-repository! (repository-base) ;; (locate-repository)
+                          )
   (toplevel-command 'doc (lambda () (repl-doc-dwim (read)))
                     ",doc PATH         Describe identifier or path with chicken-doc"))

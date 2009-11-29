@@ -13,7 +13,7 @@
   (when (global-write-lock)
     ;; Not currently recursive.
       (error "Already acquired global write lock"))
-  (let ((out (open-output-file (make-pathname (cdoc-base) "lock"))))
+  (let ((out (open-output-file (make-pathname (repository-base) "lock"))))
     (file-lock/blocking out)
     (global-write-lock out)))
 (define (release-global-write-lock!)
@@ -88,14 +88,14 @@
 (define (create-repository!)
   ;; FIXME: initialization should not occur if the version is wrong
   (when (file-exists? (repo-magic))
-    (error "Repository already exists at" (cdoc-base)))
-  (create-directory (cdoc-base))
+    (error "Repository already exists at" (repository-base)))
+  (create-directory (repository-base))
 ;; (create-directory (cdoc-root))         ;; Created automatically in write-key
   (with-output-to-file (repo-magic)
     (lambda () (pp `((version . ,repo-version))))))
 (define (describe-repository)
 ;;   (print "Repository information:")
-  (pp (cons `(location . ,(cdoc-base))
+  (pp (cons `(location . ,(repository-base))
             (repository-information))))
 
 ;;; Hilevel parsing (units, eggs)
@@ -107,7 +107,7 @@
                                      (string-concatenate-reverse
                                       (intersperse tag-body "\n"))
                                      type sig)
-;;                           (warning "Skipped writing tag for signature" sig)
+;;                        (warning "Skipped writing tag for signature" sig)
                           )))
             (reverse tags)))
 
@@ -117,27 +117,29 @@
   (open-output-file
    (keys+field->pathname (path->keys path) 'text)))
 
-(define (write-eggshell name)
-  (write-key (list name) #f 'egg
-             (string-append name " egg")))
-(define (write-unitshell name id)
-  (write-key (list id) #f 'unit name))
+(define (write-eggshell path)
+  (let ((name (last path)))
+    (write-key path #f 'egg
+               (string-append name " egg"))))
+(define (write-unitshell path name)
+  (write-key path #f 'unit name))
 
-(define +wikidir+ "~/scheme/chicken-wiki")
-(define +eggdir+ (string-append +wikidir+ "/eggref/4"))
-(define +mandir+ (string-append +wikidir+ "/man/4"))
-;; parse-egg and parse-unit STILL don't take paths
-(define (parse-egg name)
-  (let ((fn (make-pathname +eggdir+ name))
-        (path `(,name)))
-    (with-global-write-lock
-     (lambda ()
-       (write-eggshell name)
-       (let ((t (open-output-text path)))
-         (parse-and-write-tags/svnwiki fn (lambda (tags body)
-                                            (write-tags tags body path))
-                                       t)
-         (close-output-port t))))))
+;; (define +wikidir+ "~/scheme/chicken-wiki")
+;; (define eggdir (make-parameter
+;;                 (make-pathname `(,+wikidir+ "eggref" "4") #f)))
+;; (define mandir (make-parameter
+;;                 (make-pathname `(,+wikidir+ "man" "4") #f)))
+
+(define (parse-egg fn path)
+  (with-global-write-lock
+   (lambda ()
+     (write-eggshell path)
+     (let ((t (open-output-text path)))
+       (parse-and-write-tags/svnwiki fn (lambda (tags body)
+                                          (write-tags tags body path))
+                                     t)
+       (close-output-port t)))))
+
 (define (parse-unit name id)
   (let ((fn (make-pathname +mandir+ name))
         (path (list id)))
@@ -150,10 +152,16 @@
                                        t)
          (close-output-port t))))))
 
-(define (refresh-eggs)
+(define (parse-egg-directory dir type)
+  type ;ignored -- e.g. 'svnwiki
   (with-global-write-lock
    (lambda ()
-     (for-each (lambda (x) (print x) (parse-egg x)) (directory +eggdir+)))))
+     (for-each (lambda (fn)
+                 (print fn)
+                 (parse-egg (make-pathname dir fn)
+                            `(,fn)))
+               (directory dir))
+     (refresh-id-cache))))
 
 ;;; ID search cache (write)
 

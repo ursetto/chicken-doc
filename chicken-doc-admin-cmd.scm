@@ -19,7 +19,7 @@
         (else
          (unless (verify-repository)
            (fprintf (current-error-port)
-                    "No repository found at ~a\nUse -i to initialize\n" (cdoc-base))
+                    "No repository found at ~a\nUse -i to initialize\n" (repository-base))
            (exit 1))
          (cond ((string=? o "-r")
                 (print "Rebuilding ID cache...")

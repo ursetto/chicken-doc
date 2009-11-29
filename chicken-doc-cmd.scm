@@ -13,7 +13,7 @@
 
 (unless (verify-repository)
   (fprintf (current-error-port) "No repository found at ~a\n"
-           (cdoc-base))
+           (repository-base))
   (exit 1))
 
 (let ((o (car (command-line-arguments))))
