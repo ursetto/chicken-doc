@@ -152,14 +152,19 @@
 
 ;;; svnwiki egg and man tree parsing
 
+(define (parse-individual-egg pathname type)
+  type ;ignored
+  (let ((name (pathname-file pathname)))
+    (parse-egg pathname `(,name))))
+
 (define (parse-egg-directory dir type)
   type ;ignored -- e.g. 'svnwiki
   (with-global-write-lock
    (lambda ()
-     (for-each (lambda (fn)
-                 (print fn)
-                 (parse-egg (make-pathname dir fn)
-                            `(,fn)))
+     (for-each (lambda (name)
+                 (print name)
+                 (parse-egg (make-pathname dir name)
+                            `(,name)))
                (directory dir))
      (refresh-id-cache))))
 
