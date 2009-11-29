@@ -140,17 +140,17 @@
                                      t)
        (close-output-port t)))))
 
-(define (parse-unit name id)
-  (let ((fn (make-pathname +mandir+ name))
-        (path (list id)))
-    (with-global-write-lock
-     (lambda ()
-       (write-unitshell name id)
-       (let ((t (open-output-text path)))
-         (parse-and-write-tags/svnwiki fn (lambda (tags body)
-                                            (write-tags tags body path))
-                                       t)
-         (close-output-port t))))))
+(define (parse-unit fn path name)
+  (with-global-write-lock
+   (lambda ()
+     (write-unitshell path name)
+     (let ((t (open-output-text path)))
+       (parse-and-write-tags/svnwiki fn (lambda (tags body)
+                                          (write-tags tags body path))
+                                     t)
+       (close-output-port t)))))
+
+;;; svnwiki egg and man tree parsing
 
 (define (parse-egg-directory dir type)
   type ;ignored -- e.g. 'svnwiki
@@ -162,6 +162,44 @@
                             `(,fn)))
                (directory dir))
      (refresh-id-cache))))
+
+(define (parse-man-directory dir type)
+  type ;ignored
+  (with-global-write-lock
+   (lambda ()
+     (for-each (lambda (fn)
+                 (and-let* ((path (man-filename->path fn)))
+                   (print fn)
+                   (parse-unit (make-pathname dir fn)
+                               path fn)))
+               (directory dir))
+     (refresh-id-cache))))
+
+(define man-filename->path
+  (let ((re:unit (irregex "^Unit (.*)"))
+        (symbolify-list (lambda (x) (and x (map (lambda (x)
+                                             (if (symbol? x) x (string->symbol x)))
+                                           x)))))
+    (lambda (t)
+      (symbolify-list
+       (cond ((string-search re:unit t) => cdr) ; ("lolevel")
+             ((string=? t "Interface to external functions and variables")
+              '(foreign))
+             ((string=? t "Accessing external objects")
+              '(foreign access))
+             ((string=? t "C Interface")
+              '(foreign c-interface))
+             ((string=? t "Embedding")
+              '(foreign embedding))
+             ((string=? t "Foreign type specifiers")
+              '(foreign types))
+             ((string=? t "Callbacks")
+              '(foreign callbacks))
+             ((string=? t "Locations")
+              '(foreign locations))
+             ((string=? t "Other support procedures")
+              '(foreign support))
+             (else #f))))))
 
 ;;; ID search cache (write)
 

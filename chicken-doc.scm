@@ -120,7 +120,7 @@
 ;; Display the signature of all child keys of PATH, to stdout.
 ;; NB: if we change path->keys to assume strings inside a path are already keys,
 ;; we could avoid the key->id->key conversion in SIGNATURE.
-(define (describe-children path)
+(define (describe-contents path)
   (for-each (lambda (x) (print (key->id x)
                           "\t\t"
                           (signature (append path
@@ -191,6 +191,15 @@
 (define (search-only id)
   (let ((entries (lookup id)))
     (describe-signatures entries)))
+(define (search-and-describe-contents id)
+  (let ((entries (lookup id)))
+    (cond ((null? entries)
+           (void))
+          ((null? (cdr entries))
+           (print "path: " (car entries))
+           (describe-contents (car entries)))
+          (else
+           (describe-matches entries)))))
 
 (define (doc-dwim path)
   (cond ((or (null? path)
@@ -230,9 +239,19 @@
 ;;; REPL
 
 (define repl-doc-dwim doc-dwim)
+(define repl-toc-dwim            ;; FIXME: ignore # paths for now
+  (lambda (path)
+    (cond ((or (null? path)
+               (pair? path))
+           (describe-contents path))
+          (else
+           (search-and-describe-contents path)))))
 
 (when (feature? 'csi)
   (set-chicken-doc-repository! (repository-base) ;; (locate-repository)
                           )
   (toplevel-command 'doc (lambda () (repl-doc-dwim (read)))
-                    ",doc PATH         Describe identifier or path with chicken-doc"))
+                    ",doc PATH         Describe identifier or path with chicken-doc")
+  (toplevel-command 'toc (lambda () (repl-toc-dwim (read)))
+                    ;; TOC should look up if this is a relative path
+                    ",toc PATH         List contents of path"))
