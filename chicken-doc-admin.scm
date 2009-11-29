@@ -199,6 +199,21 @@
               '(foreign locations))
              ((string=? t "Other support procedures")
               '(foreign support))
+
+             ((string=? t "Extensions")
+              '(extensions))                      ;; FIXME
+
+             ((string=? t "Declarations")
+              '(chicken declarations))
+             ((string=? t "Parameters")
+              '(chicken parameters))
+             ((string=? t "Non-standard macros and special forms")
+              '(chicken macros))
+             ((string=? t "Modules and macros")
+              '(chicken modules))                  ;; FIXME
+
+             ((string=? t "Using the interpreter")
+              '(csi))
              (else #f))))))
 
 ;;; ID search cache (write)
