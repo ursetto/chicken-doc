@@ -76,10 +76,12 @@
    (directory dir #t))
   (delete-directory dir))
 
-;; Warning: delete-key deletes recursively
+;; Warning: delete-key deletes recursively.
 (define (delete-key path)
-  (error 'delete-key "No such path" path)
-  (recursive-delete-directory (keys->pathname (path->keys path))))
+  (let ((pathname (keys->pathname (path->keys path))))
+    (unless (directory? pathname)
+      (error 'delete-key "No such path" path))
+    (recursive-delete-directory pathname)))
 
 ;;; Repo manipulation
 
