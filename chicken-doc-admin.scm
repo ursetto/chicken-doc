@@ -61,6 +61,26 @@
                 (lambda ()
                   (display text))))))))))
 
+;; find-files follows symlinks, doesn't do depth first unless we cons up
+;; everything, and doesn't include DIR itself; easier to write our own
+(define (recursive-delete-directory dir)
+  (for-each
+   (lambda (x)
+     (let ((fn (make-pathname dir x)))
+       (cond ((symbolic-link? fn)
+              (delete-file fn))
+             ((not (directory? fn))
+              (delete-file fn))
+             (else
+              (recursive-delete-directory fn)))))
+   (directory dir #t))
+  (delete-directory dir))
+
+;; Warning: delete-key deletes recursively
+(define (delete-key path)
+  (error 'delete-key "No such path" path)
+  (recursive-delete-directory (keys->pathname (path->keys path))))
+
 ;;; Repo manipulation
 
 (define (create-repository!)
@@ -104,6 +124,7 @@
 (define +wikidir+ "~/scheme/chicken-wiki")
 (define +eggdir+ (string-append +wikidir+ "/eggref/4"))
 (define +mandir+ (string-append +wikidir+ "/man/4"))
+;; parse-egg and parse-unit STILL don't take paths
 (define (parse-egg name)
   (let ((fn (make-pathname +eggdir+ name))
         (path `(,name)))
