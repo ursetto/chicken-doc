@@ -88,10 +88,15 @@
 ;; Return string representing signature of PATH
 (define (signature path)
   (let* ((keys (path->keys path))
-         (metafile (keys+field->pathname keys 'meta)))
-    (cond ((and (file-exists? metafile))
+         (pathname (keys->pathname keys))
+         (metafile (pathname+field->pathname pathname 'meta)))
+    (cond ((file-exists? metafile)
            (let ((meta (with-input-from-file metafile read-file)))
              (cadr (assq 'signature meta))))
+          ((directory? pathname)
+           ;; write-keys may create intermediate container directories
+           ;; without metadata, so handle this specially.
+           "")
           (else
            (error "No such identifier" path)))))
 
