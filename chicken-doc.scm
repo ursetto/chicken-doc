@@ -68,9 +68,10 @@
   (make-pathname (cons (cdoc-root) keys) #f))
 (define (field-filename name)
   (string-append "," (->string name)))
+(define (pathname+field->pathname pathname field)
+  (make-pathname pathname (field-filename field)))
 (define (keys+field->pathname keys field)  ;; should this take a path instead of keys?
-  (make-pathname (keys->pathname keys)
-                 (field-filename field)))
+  (pathname+field->pathname (keys->pathname keys) field))
 
 ;;; Access
 

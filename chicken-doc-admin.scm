@@ -1,5 +1,6 @@
 
 (require-library chicken-doc)
+(use matchable)
 
 (include "cdoc-parser.scm")
 (import chicken-doc-parser)
@@ -33,26 +34,32 @@
 
 ;;; Lowlevel
 
-(define (write-key text type sig id path)
-  (and-let* ((key (id->key id)))
+;; PATH: a list or string key path.  TEXT: String to write to text
+;; key, or #f to skip.  TYPE: key type (container types are 'unit and 'egg;
+;; tag types are 'procedure, 'macro, etc.)  SIGNATURE:
+;; Function signature as string; also used for a short description
+;; of containers.
+(define (write-key path text type sig)
+  (let* ((keys (path->keys path))
+         (pathname (keys->pathname keys)))
     (with-global-write-lock
      (lambda ()
+       (create-directory pathname #t) ;; mkdir -p
        (with-cwd
-        (cdoc-root)
+        pathname
         (lambda ()
-          (change-directory (make-pathname path #f))
-          (create-directory key)       ;; silently ignore if exists
-          (change-directory key)
-          (with-output-to-file ",meta"
+          (with-output-to-file (field-filename 'meta)
             (lambda ()
               (for-each (lambda (x)
                           (write x) (newline))
                         `((type ,type)
                           (signature ,sig)
-                          (identifier ,id)))))
-          (with-output-to-file ",text"
-            (lambda ()
-              (display text)))))))))
+                          ;; (identifier ,id)
+                          ))))
+          (if text
+              (with-output-to-file (field-filename 'text)
+                (lambda ()
+                  (display text))))))))))
 
 ;;; Repo manipulation
 
@@ -71,44 +78,39 @@
 
 ;;; Hilevel parsing (units, eggs)
 
-;; FIXME: Path is a list of directories (because that's what write-tag expects).
-;; This is broken, because write-tag does not escape them
 (define (write-tags tags tag-body path)
   (for-each (match-lambda ((type sig id)
                       (if id
-                          (write-key (string-concatenate-reverse
+                          (write-key (append path (list id))
+                                     (string-concatenate-reverse
                                       (intersperse tag-body "\n"))
-                                     type sig id path)
+                                     type sig)
 ;;                           (warning "Skipped writing tag for signature" sig)
                           )))
             (reverse tags)))
 
-;; This is a hack so we can open an output port to the
-;; text key, which is then passed to the parser to write
-;; a transformed wiki document.  FIXME: make this less dumb.
-(define (open-output-text id path)
-  (and-let* ((key (id->key id)))
-    (open-output-file (make-pathname
-                       (append (list (cdoc-root))
-                               path (list key)) ",text"))))
+;; Open output port to the text key, which is passed to the parser
+;; to write a transformed wiki document.  Semi-dumb.
+(define (open-output-text path)
+  (open-output-file
+   (keys+field->pathname (path->keys path) 'text)))
 
 (define (write-eggshell name)
-  (write-key "This space intentionally left blank"
-             'egg (string-append name " egg") name '(".")))  ;; "." due to change-directory
+  (write-key (list name) #f 'egg
+             (string-append name " egg")))
 (define (write-unitshell name id)
-  (write-key "This space intentionally left blank"
-             'unit name id '(".")))
+  (write-key (list id) #f 'unit name))
 
 (define +wikidir+ "~/scheme/chicken-wiki")
 (define +eggdir+ (string-append +wikidir+ "/eggref/4"))
 (define +mandir+ (string-append +wikidir+ "/man/4"))
 (define (parse-egg name)
   (let ((fn (make-pathname +eggdir+ name))
-        (path (list name)))   ;; Possible FIXME (see write-tags)
+        (path `(,name)))
     (with-global-write-lock
      (lambda ()
        (write-eggshell name)
-       (let ((t (open-output-text name '())))
+       (let ((t (open-output-text path)))
          (parse-and-write-tags/svnwiki fn (lambda (tags body)
                                             (write-tags tags body path))
                                        t)
@@ -119,7 +121,7 @@
     (with-global-write-lock
      (lambda ()
        (write-unitshell name id)
-       (let ((t (open-output-text id '())))
+       (let ((t (open-output-text path)))
          (parse-and-write-tags/svnwiki fn (lambda (tags body)
                                             (write-tags tags body path))
                                        t)
