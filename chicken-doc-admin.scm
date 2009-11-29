@@ -90,7 +90,7 @@
   (when (file-exists? (repo-magic))
     (error "Repository already exists at" (cdoc-base)))
   (create-directory (cdoc-base))
-  (create-directory (cdoc-root))
+;; (create-directory (cdoc-root))         ;; Created automatically in write-key
   (with-output-to-file (repo-magic)
     (lambda () (pp `((version . ,repo-version))))))
 (define (describe-repository)

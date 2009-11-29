@@ -3,7 +3,7 @@
 (require-library chicken-doc-admin)
 
 (define (usage)
-  (print "usage: " (program-name) " [-r]")
+  (print "usage: " (program-name) " COMMAND")
   (print "  -r        regenerate indices")
   (print "  -l        list repository information")
   (print "  -i        initialize repository non-destructively")
