@@ -7,6 +7,7 @@
   (print "  -r        regenerate indices")
   (print "  -l        list repository information")
   (print "  -i        initialize repository non-destructively")
+  (print "  -d path   delete key path recursively (EMPTY PATH DELETES ENTIRE REPO)")
   (exit))
 
 (when (null? (command-line-arguments))
@@ -25,5 +26,8 @@
                 (refresh-id-cache))
                ((string=? o "-l")
                 (describe-repository))
+               ((string=? o "-d")
+                (delete-key (map string->symbol
+                                 (cdr (command-line-arguments)))))
                (else
                 (usage))))))
