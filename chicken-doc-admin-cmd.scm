@@ -8,6 +8,8 @@
   (print "  -l        list repository information")
   (print "  -i        initialize repository non-destructively")
   (print "  -d path   delete key path recursively (EMPTY PATH DELETES ENTIRE REPO)")
+  (print "  -e dir    process svnwiki egg directory DIR")
+  (print "  -m dir    process svnwiki manual directory DIR")
   (exit))
 
 (when (null? (command-line-arguments))
@@ -29,5 +31,15 @@
                ((string=? o "-d")
                 (delete-key (map string->symbol
                                  (cdr (command-line-arguments)))))
+               ((string=? o "-e")
+                (unless (pair? (cdr (command-line-arguments)))
+                  (usage))
+                (parse-egg-directory (cadr (command-line-arguments))
+                                     'svnwiki))
+               ((string=? o "-m")
+                (unless (pair? (cdr (command-line-arguments)))
+                  (usage))
+                (parse-man-directory (cadr (command-line-arguments))
+                                     'svnwiki))
                (else
                 (usage))))))
