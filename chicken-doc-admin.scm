@@ -1,9 +1,23 @@
+;;; chicken-doc-admin
 
+(include "chicken-doc-parser.scm")
+
+(module chicken-doc-admin
+;; Used by chicken-doc-admin command
+(refresh-id-cache
+ describe-repository
+ delete-key
+ parse-egg-directory parse-individual-egg
+ parse-man-directory parse-individual-man
+ create-repository!
+ )
+
+(import scheme chicken)
 (require-library chicken-doc)
 (import chicken-doc)
-(use matchable)
+(use matchable srfi-69 posix regex data-structures files extras srfi-13 srfi-1)
+(import irregex)
 
-(include "cdoc-parser.scm")
 (import chicken-doc-parser)
 
 ;;; Locking
@@ -260,3 +274,5 @@
 ;;      (print "Writing ID cache...")
      (write-id-cache!))))
 
+
+)  ;; end module

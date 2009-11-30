@@ -1,6 +1,7 @@
 #!/usr/bin/env csi4 -script
 
 (require-library chicken-doc-admin)
+(import chicken-doc-admin)
 (require-library chicken-doc)
 (import (only chicken-doc repository-base verify-repository))
 (use ports)

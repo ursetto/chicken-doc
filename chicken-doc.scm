@@ -189,7 +189,7 @@
 (define (search-and-describe id)
   (let ((entries (lookup id)))
     (cond ((null? entries)
-           (void))
+           (error "No such identifier" id))
           ((null? (cdr entries))
            (print "path: " (car entries))
            (describe (car entries)))
