@@ -5,10 +5,10 @@
 (install-extension
   'chicken-doc
   '("chicken-doc.so" "chicken-doc.import.so")
-  `((version 0.1)
+  `((version 0.1.0)
     (documentation "chicken-doc.html")))
 
 (install-program
  'chicken-doc
  '("chicken-doc")
- `((version 0.1)))
+ `((version 0.1.0)))
