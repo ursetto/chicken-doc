@@ -138,7 +138,8 @@
        (parse-and-write-tags/svnwiki fn (lambda (tags body)
                                           (write-tags tags body path))
                                      t)
-       (close-output-port t)))))
+       (close-output-port t))))
+  #t)
 
 (define (parse-man fn path name)
   (with-global-write-lock
@@ -148,14 +149,16 @@
        (parse-and-write-tags/svnwiki fn (lambda (tags body)
                                           (write-tags tags body path))
                                      t)
-       (close-output-port t)))))
+       (close-output-port t))))
+  #t)
 
 ;;; svnwiki egg and man tree parsing
 
 (define (parse-individual-egg pathname type)
   type ;ignored
   (let ((name (pathname-file pathname)))
-    (parse-egg pathname `(,name))))
+    (and (regular-file? pathname)
+         (parse-egg pathname `(,name)))))
 
 (define man-filename->path
   (let ((re:unit (irregex "^Unit (.*)"))
@@ -203,16 +206,17 @@
   (with-global-write-lock
    (lambda ()
      (for-each (lambda (name)
-                 (parse-individual-egg (make-pathname dir name) 'svnwiki)
-                 (print name))
+                 (when (parse-individual-egg (make-pathname dir name) 'svnwiki)
+                   (print name)))
                (directory dir))
      (refresh-id-cache))))
 
 (define (parse-individual-man pathname type)
   type ;ignored
   (let ((name (pathname-file pathname)))
-    (and-let* ((path (man-filename->path name)))
-      (parse-man pathname path name))))
+    (let ((path (man-filename->path name)))
+      (and path (regular-file? path)
+           (parse-man pathname path name)))))
 
 (define (parse-man-directory dir type)
   type ;ignored

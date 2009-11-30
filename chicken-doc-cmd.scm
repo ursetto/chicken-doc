@@ -3,8 +3,17 @@
 (require-library chicken-doc)
 
 (define (usage)
-  (print "usage: " (program-name) " [-s|-f|-c|-i] path ...")
-  (exit))
+  (with-output-to-port (current-error-port)
+    (lambda ()
+      (print "usage: " (program-name) " [-s|-f|-c|-i] path")
+      (print "       " (program-name) " key | path")
+      (print "  -s path        Show signature")
+      (print "  -c path        Show table of contents")
+      (print "  -i path        Show documentation")
+      (print "  -f key         Search for key and show signature(s)")
+      (print "  key            Search for key and show documentation")
+      (print "  path           Show documentation for absolute path")
+      (exit 1))))
 
 ;; (init)
 
