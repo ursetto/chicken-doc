@@ -1,0 +1,14 @@
+(compile -s -O2 -d1 chicken-doc.scm -j chicken-doc)
+(compile -s -O2 -d0 chicken-doc.import.scm)
+(compile -o chicken-doc -O2 -d1 chicken-doc-cmd.scm)
+
+(install-extension
+  'chicken-doc
+  '("chicken-doc.so" "chicken-doc.import.so")
+  `((version 0.1)
+    (documentation "chicken-doc.html")))
+
+(install-program
+ 'chicken-doc
+ '("chicken-doc")
+ `((version 0.1)))

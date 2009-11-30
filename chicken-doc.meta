@@ -1,0 +1,8 @@
+((egg "chicken-doc.egg")
+ (synopsis "Explore Chicken documentation locally")
+ (author "Jim Ursetto")
+ (category doc-tools)
+ (license "BSD")
+ (doc-from-wiki)
+;(needs tender loving care)
+ (files "chicken-doc.scm" "chicken-doc-cmd.scm" "chicken-doc.setup" "chicken-doc.html"))
