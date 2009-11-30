@@ -9,6 +9,6 @@
     (documentation "chicken-doc.html")))
 
 (install-program
- 'chicken-doc
+ 'chicken-doc-cmd
  '("chicken-doc")
  `((version 0.1.0)))
