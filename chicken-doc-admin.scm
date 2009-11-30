@@ -98,12 +98,12 @@
 
 (define (create-repository!)
   ;; FIXME: initialization should not occur if the version is wrong
-  (when (file-exists? (repo-magic))
+  (when (file-exists? (repository-magic))
     (error "Repository already exists at" (repository-base)))
   (create-directory (repository-base))
 ;; (create-directory (cdoc-root))         ;; Created automatically in write-key
-  (with-output-to-file (repo-magic)
-    (lambda () (pp `((version . ,repo-version))))))
+  (with-output-to-file (repository-magic)
+    (lambda () (pp `((version . ,repository-version))))))
 (define (describe-repository)
 ;;   (print "Repository information:")
   (pp (cons `(location . ,(repository-base))

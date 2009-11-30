@@ -13,10 +13,9 @@
  describe-contents
  describe
  doc-dwim
-;; Used by chicken-doc-admin.  Effectively internal, but exported.
- repository-information
- repo-magic repo-version
- repository-root
+;; Used additionally by chicken-doc-admin.  Somewhat internal, but exported.
+ repository-information repository-root
+ repository-magic repository-version
  id-cache id-cache-filename id-cache-mtime id-cache-add-directory!
  path->keys keys->pathname field-filename keys+field->pathname
  )
@@ -226,16 +225,16 @@
 
 ;;; Repository
 
-(define repo-version 1)
+(define repository-version 1)
 (define repository-information (make-parameter '()))
-(define (repo-magic)
+(define (repository-magic)
   (make-pathname (repository-base) ".chicken-doc-repo"))
 (define (verify-repository)
-  (and (file-exists? (repo-magic))
-       (let ((repo-info (with-input-from-file (repo-magic) read)))
+  (and (file-exists? (repository-magic))
+       (let ((repo-info (with-input-from-file (repository-magic) read)))
          (repository-information repo-info)
          (let ((version (or (alist-ref 'version repo-info) 0)))
-           (cond ((= version repo-version))
+           (cond ((= version repository-version))
                  (else (fprintf (current-error-port) "Invalid repo version number ~a\n" version)
                        #f))))))
 (define (set-chicken-doc-repository! x)
