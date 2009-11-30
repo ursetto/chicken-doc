@@ -1,6 +1,7 @@
 #!/usr/bin/env csi4 -script
 
 (require-library chicken-doc)
+(import chicken-doc)
 
 (define (usage)
   (with-output-to-port (current-error-port)
@@ -60,8 +61,3 @@
            (if (null? (cdr ids))
                (doc-dwim (car ids))
                (doc-dwim ids))))))
-
-
-
-
-;;

@@ -1,5 +1,6 @@
 
 (require-library chicken-doc)
+(import chicken-doc)
 (use matchable)
 
 (include "cdoc-parser.scm")
@@ -31,6 +32,16 @@
                                   (signal exn))
            (thunk)
            (release-global-write-lock!)))))
+
+;;; Util
+
+(define (with-cwd dir thunk)          ;; FIXME: dynamic-wind
+  (let ((old (current-directory)))
+    (current-directory dir)
+    (handle-exceptions exn (begin (current-directory old)
+                                  (signal exn))
+      (thunk)
+      (current-directory old))))
 
 ;;; Lowlevel
 
@@ -215,7 +226,7 @@
   type ;ignored
   (let ((name (pathname-file pathname)))
     (let ((path (man-filename->path name)))
-      (and path (regular-file? path)
+      (and path (regular-file? pathname)
            (parse-man pathname path name)))))
 
 (define (parse-man-directory dir type)
@@ -228,7 +239,7 @@
                (directory dir))
      (refresh-id-cache))))
 
-;;; ID search cache (write)
+;;; ID search cache (write) -- perhaps should be in chicken-doc proper
 
 (define (write-id-cache!)
   (let ((tmp-fn (string-append (id-cache-filename) ".tmp")))
@@ -241,7 +252,7 @@
 (define (refresh-id-cache)
   (with-global-write-lock
    (lambda ()
-     (with-cwd (cdoc-root)
+     (with-cwd (repository-root)
                (lambda ()
                  (id-cache (make-hash-table eq?))
                  (for-each id-cache-add-directory!

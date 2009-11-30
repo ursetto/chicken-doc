@@ -4,11 +4,27 @@
 ;; such as id->key.  Furthermore even certain regular things shouldn't
 ;; be exported to the REPL.
 
-(use matchable)
-(use regex)
-(use srfi-13)
-(use posix)
+(module chicken-doc
+;; Used by chicken-doc command
+(verify-repository
+ repository-base
+ describe-signatures
+ search-only
+ describe-contents
+ describe
+ doc-dwim
+;; Used by chicken-doc-admin.  Effectively internal, but exported.
+ repository-information
+ repo-magic repo-version
+ repository-root
+ id-cache id-cache-filename id-cache-mtime id-cache-add-directory!
+ path->keys keys->pathname field-filename keys+field->pathname
+ )
 
+(import scheme chicken)
+(use matchable regex srfi-13 posix data-structures srfi-69 extras files utils)
+(import irregex)
+(import (only csi toplevel-command))
 
 ;;; Config
 
@@ -18,21 +34,13 @@
 (define (locate-repository)
   (or (getenv "CHICKEN_DOC_REPOSITORY")
       (make-pathname (chicken-home) "chicken-doc")))
+
+;; Hmm--should we set this on module load?
 (repository-base (locate-repository))
-
-;;; Util
-
-(define (with-cwd dir thunk)          ;; FIXME: dynamic-wind
-  (let ((old (current-directory)))
-    (current-directory dir)
-    (handle-exceptions exn (begin (current-directory old)
-                                  (signal exn))
-      (thunk)
-      (current-directory old))))
 
 ;;; Lowlevel
 
-(define (cdoc-root)
+(define (repository-root)
   (make-pathname (repository-base) "root"))
 
 (define +rx:%escape+ (irregex "[%/,.]"))
@@ -65,7 +73,7 @@
                    path
                    (string-split (->string path) "#"))))
 (define (keys->pathname keys)
-  (make-pathname (cons (cdoc-root) keys) #f))
+  (make-pathname (cons (repository-root) keys) #f))
 (define (field-filename name)
   (string-append "," (->string name)))
 (define (pathname+field->pathname pathname field)
@@ -248,6 +256,8 @@
            (search-and-describe-contents path)))))
 
 (when (feature? 'csi)
+  ;; Warning -- will execute if called from a script.
+  ;; We really only want this to execute at the REPL.
   (set-chicken-doc-repository! (repository-base) ;; (locate-repository)
                           )
   (toplevel-command 'doc (lambda () (repl-doc-dwim (read)))
@@ -255,3 +265,6 @@
   (toplevel-command 'toc (lambda () (repl-toc-dwim (read)))
                     ;; TOC should look up if this is a relative path
                     ",toc PATH         List contents of path"))
+
+)  ;; end module
+
