@@ -4,5 +4,5 @@
  (category doc-tools)
  (license "BSD")
  (doc-from-wiki)
-;(needs tender loving care)
+ (needs matchable)  ; and a little TLC
  (files "chicken-doc.scm" "chicken-doc-cmd.scm" "chicken-doc.setup" "chicken-doc.html"))
