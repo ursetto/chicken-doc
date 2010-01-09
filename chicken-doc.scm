@@ -109,6 +109,12 @@
 
 ;;; Describe
 
+;; Utility procedure (dropped in Chicken >= 4.3.2)
+(define (for-each-line proc #!optional (port (current-input-port)))
+  (do ((line (read-line port) (read-line port)))
+      ((eof-object? line))
+    (proc line)))
+
 ;; Display file to stdout
 (define (cat file)
   (with-input-from-file file
