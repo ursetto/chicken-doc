@@ -42,7 +42,7 @@
 (define (repository-root)
   (make-pathname (repository-base) "root"))
 
-(define +rx:%escape+ (irregex "[%/,.*<>?!]"))
+(define +rx:%escape+ (irregex "[%/,.*<>?! ]"))
 (define +rx:%unescape+ (irregex "%([0-9a-fA-F][0-9a-fA-F])"))
 
 (define (id->key id)
