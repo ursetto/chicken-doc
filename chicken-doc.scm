@@ -18,6 +18,9 @@
  repository-magic repository-version
  id-cache id-cache-filename id-cache-mtime id-cache-add-directory!
  path->keys keys->pathname field-filename keys+field->pathname
+;; Other API
+ signature
+ node-type
  )
 
 (import scheme chicken)
@@ -92,20 +95,36 @@
          (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
                  (directory dir)))))
 
-;; Return string representing signature of PATH
-(define (signature path)
+(define (read-meta-key path key)
   (let* ((keys (path->keys path))
          (pathname (keys->pathname keys))
          (metafile (pathname+field->pathname pathname 'meta)))
     (cond ((file-exists? metafile)
            (let ((meta (with-input-from-file metafile read-file)))
-             (cadr (assq 'signature meta))))
+             (cond ((assq key meta) => cadr)
+                   (else #f))))
           ((directory? pathname)
            ;; write-keys may create intermediate container directories
            ;; without metadata, so handle this specially.
-           "")
+           #f)
           (else
            (error "No such identifier" path)))))
+
+;; Return string representing signature of PATH.
+(define (signature path)
+  (or (read-meta-key path 'signature)
+      ""))
+
+;; Return symbol representing type of PATH, or 'unknown.
+;; This is a stop-gap, as we would actually like to pass node records
+;; around so we don't have to read the file for every access.
+(define (node-type path)
+  (let ((key (read-meta-key path 'type)))
+    (if key
+        (if (string? key)
+            (string->symbol key)
+            key)
+        'unknown)))
 
 ;;; Describe
 
