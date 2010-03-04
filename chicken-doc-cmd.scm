@@ -1,7 +1,9 @@
-#!/usr/bin/env csi4 -script
-
 (require-library chicken-doc)
 (import chicken-doc)
+(require-library posix)
+(import (only posix with-output-to-pipe setenv))
+
+;;; Usage
 
 (define (usage)
   (with-output-to-port (current-error-port)
@@ -13,7 +15,7 @@
       (print "  -c path        Show table of contents (child keys)")
       (print "  -i path        Show documentation")
       (print "  -f key         Show all matching paths for key")
-      (print "where KEY is a single identifier and PATH is one or")
+      (print "where KEY is a single identifier and PATH is zero or")
       (print "more keys comprising a path from the documentation root,")
       (print "separated by spaces or the # character.")
       (print)
@@ -29,13 +31,39 @@
       (print "  -s 9p open/rdonly        # Show signature of open/rdonly in 9p egg")
       (print "  -i 9p#open/rdonly        # Show documentation for same")
       (print "  -c posix                 # Show TOC for Unit posix")
+      (print "  -c                       # Show toplevel TOC")
       (print "  use                      # Show doc for \"use\" in chicken core")
       (print "  posix                    # Show doc for Unit posix")
       (print "  open/rdonly              # Show matches for open/rdonly")
       (print "  posix open/rdonly        # Show doc for open/rdonly in Unit posix")
       (exit 1))))
 
-;; (init)
+;;; Pager
+
+(define *default-pager*
+  (case (software-type)
+    ((windows) "more")
+    ((unix) "less")
+    (else "")))
+(define (with-output-to-pager thunk)
+  (cond ((get-environment-variable "EMACS")
+         (thunk))  ; Don't page in emacs subprocess.
+        ((not (terminal-port? (current-output-port)))
+         (thunk))  ; Don't page if stdout is not a TTY.
+        (else
+         (unless (get-environment-variable "LESS")
+           (setenv "LESS" "FRSXis"))  ; Default 'less' options
+         (let ((pager (or (get-environment-variable "CHICKEN_DOC_PAGER")
+                          (get-environment-variable "PAGER")
+                          *default-pager*
+                          "")))
+           (if (or (string=? pager "")
+                   (string=? pager "cat")) 
+               (thunk)
+               ;; Can't reliably detect if pipe open fails.
+               (with-output-to-pipe pager thunk))))))
+
+;;; Main
 
 (when (null? (command-line-arguments))
   (usage))
@@ -45,19 +73,22 @@
            (repository-base))
   (exit 1))
 
-(let ((o (car (command-line-arguments))))
-  (cond ((string=? o "-s")
-	 (describe-signatures (list (map string->symbol (cdr (command-line-arguments))))))
-        ((string=? o "-f")
-         ;; Is this useful?  Basically, identifier search on signatures, showing path
-         ;; I wonder if we need the signature, or just the path
-	 (search-only (string->symbol (cadr (command-line-arguments)))))
-        ((string=? o "-c")
-         (describe-contents (map string->symbol (cdr (command-line-arguments)))))
-        ((string=? o "-i")
-         (describe (map string->symbol (cdr (command-line-arguments)))))
-        (else
-         (let ((ids (map string->symbol (command-line-arguments))))
-           (if (null? (cdr ids))
-               (doc-dwim (car ids))
-               (doc-dwim ids))))))
+(with-output-to-pager
+ (lambda ()
+   (let ((o (car (command-line-arguments))))
+     (cond ((string=? o "-s")
+            (describe-signatures (list (map string->symbol
+                                            (cdr (command-line-arguments))))))
+           ((string=? o "-f")
+            ;; Is this useful?  Basically, identifier search on signatures, showing path
+            ;; I wonder if we need the signature, or just the path
+            (search-only (string->symbol (cadr (command-line-arguments)))))
+           ((string=? o "-c")
+            (describe-contents (map string->symbol (cdr (command-line-arguments)))))
+           ((string=? o "-i")
+            (describe (map string->symbol (cdr (command-line-arguments)))))
+           (else
+            (let ((ids (map string->symbol (command-line-arguments))))
+              (if (null? (cdr ids))
+                  (doc-dwim (car ids))
+                  (doc-dwim ids)))))) ))
