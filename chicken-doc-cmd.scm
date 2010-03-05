@@ -42,7 +42,7 @@
 
 (define *default-pager*
   (case (software-type)
-    ((windows) "more")
+    ((windows) "more /s")
     ((unix) "less")
     (else "")))
 (define (with-output-to-pager thunk)
