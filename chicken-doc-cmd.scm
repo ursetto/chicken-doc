@@ -52,16 +52,23 @@
          (thunk))  ; Don't page if stdout is not a TTY.
         (else
          (unless (get-environment-variable "LESS")
-           (setenv "LESS" "FRSXis"))  ; Default 'less' options
+           (setenv "LESS" "FRXis"))  ; Default 'less' options
          (let ((pager (or (get-environment-variable "CHICKEN_DOC_PAGER")
                           (get-environment-variable "PAGER")
                           *default-pager*
                           "")))
            (if (or (string=? pager "")
-                   (string=? pager "cat")) 
+                   (string=? pager "cat"))
                (thunk)
-               ;; Can't reliably detect if pipe open fails.
-               (with-output-to-pipe pager thunk))))))
+               ;; with-output-to-pipe does not close pipe on exception, borking tty
+               (let ((pipe (open-output-pipe pager))
+                     (rv #f))
+                 (handle-exceptions exn (begin (close-output-pipe pipe)
+                                               (signal exn))
+                   ;; Can't reliably detect if pipe open fails.
+                   (set! rv (with-output-to-port pipe thunk)))
+                 (close-output-pipe pipe)
+                 rv))))))
 
 ;;; Main
 
