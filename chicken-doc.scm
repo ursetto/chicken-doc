@@ -167,8 +167,14 @@
                 ids))))
 
 (define (describe-signatures paths)   ; ((srfi-69 hash-table-ref) (synch synch) (posix))
-  (for-each (lambda (x) (print x "     " (signature x)))
-            paths))
+  (let ((strpaths (map (lambda (x) (fmt #f x)) paths)))
+    (let ((len (reduce max 0 (map string-length strpaths))))
+      (for-each (lambda (p s) (fmt #t
+                              (pad/right len s) "  "
+                              (signature p)
+                              nl))
+                paths strpaths))))
+
 (define (describe-matches paths)
   (print "Found " (length paths) " matches:")
   (describe-signatures paths))
