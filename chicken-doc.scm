@@ -153,27 +153,28 @@
 ;; NB: if we change path->keys to assume strings inside a path are already keys,
 ;; we could avoid the key->id->key conversion in SIGNATURE.
 (use fmt)
+(define (maximum-string-length strs)
+  (reduce max 0 (map string-length strs)))
 (define (describe-contents path)
-  (let ((ids (map key->id
-                 (or (child-keys path)
-                     (error "No such path" path)))))
-    (let ((len (reduce max 0 (map (lambda (x) (string-length (symbol->string x)))
-                                  ids))))
-      (for-each (lambda (x) (fmt #t
-                            (pad/right len x) "  "
-                            (signature (append path
-                                               (list x)))
-                            nl))
-                ids))))
+  (let ((ids (map key->id (or (child-keys path)
+                              (error "No such path" path)))))
+    (let* ((strids (map ->string ids))
+           (len (maximum-string-length strids)))
+      (for-each (lambda (i s) (fmt #t
+                              (pad/right len s) "  "
+                              (signature (append path
+                                                 (list i)))
+                              nl))
+                ids strids))))
 
 (define (describe-signatures paths)   ; ((srfi-69 hash-table-ref) (synch synch) (posix))
-  (let ((strpaths (map (lambda (x) (fmt #f x)) paths)))
-    (let ((len (reduce max 0 (map string-length strpaths))))
-      (for-each (lambda (p s) (fmt #t
-                              (pad/right len s) "  "
-                              (signature p)
-                              nl))
-                paths strpaths))))
+  (let* ((strpaths (map ->string paths))
+         (len (maximum-string-length strpaths)))
+    (for-each (lambda (p s) (fmt #t
+                            (pad/right len s) "  "
+                            (signature p)
+                            nl))
+              paths strpaths)))
 
 (define (describe-matches paths)
   (print "Found " (length paths) " matches:")
