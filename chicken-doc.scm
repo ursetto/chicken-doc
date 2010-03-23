@@ -152,28 +152,28 @@
 ;; Display the signature of all child keys of PATH, to stdout.
 ;; NB: if we change path->keys to assume strings inside a path are already keys,
 ;; we could avoid the key->id->key conversion in SIGNATURE.
-(use fmt)
 (define (maximum-string-length strs)
   (reduce max 0 (map string-length strs)))
+(define (padding len s)
+  (make-string (max 0 (- len (string-length s)))
+               #\space))
 (define (describe-contents path)
   (let ((ids (map key->id (or (child-keys path)
                               (error "No such path" path)))))
     (let* ((strids (map ->string ids))
            (len (maximum-string-length strids)))
-      (for-each (lambda (i s) (fmt #t
-                              (pad/right len s) "  "
-                              (signature (append path
-                                                 (list i)))
-                              nl))
+      (for-each (lambda (i s) (print s (padding len s)
+                                "  "
+                                (signature (append path
+                                                   (list i)))))
                 ids strids))))
 
 (define (describe-signatures paths)   ; ((srfi-69 hash-table-ref) (synch synch) (posix))
   (let* ((strpaths (map ->string paths))
          (len (maximum-string-length strpaths)))
-    (for-each (lambda (p s) (fmt #t
-                            (pad/right len s) "  "
-                            (signature p)
-                            nl))
+    (for-each (lambda (p s) (print s (padding len s)
+                              "  "
+                              (signature p)))
               paths strpaths)))
 
 (define (describe-matches paths)
