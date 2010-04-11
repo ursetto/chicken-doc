@@ -6,8 +6,7 @@
 
 (module chicken-doc
 ;; Used by chicken-doc command
-*
-#;
+
 (verify-repository
  repository-base
  describe-signatures
@@ -20,9 +19,12 @@
  repository-magic repository-version
  id-cache id-cache-filename id-cache-mtime id-cache-add-directory!
  path->keys keys->pathname field-filename keys+field->pathname
-;; Other API
+;; Node API
+ lookup-node
  node-signature
  node-type
+;; Other API
+ decompose-qualified-path
  )
 
 (import scheme chicken)
@@ -89,12 +91,13 @@
 (define (decompose-pathspec pathspec)
   (if (pair? pathspec)
       pathspec
-      (let ((p (string-split (if (symbol? pathspec)
-                                 (symbol->string pathspec) pathspec)
-                             "#")))
+      (let ((p (decompose-qualified-path pathspec)))
         (cond ((null? p) p)
               ((null? (cdr p)) (string->symbol (car p)))
               (else p)))))
+(define (decompose-qualified-path str)
+  (string-split (if (symbol? str) (symbol->string str) str)
+                "#"))
 
 ;;; Access
 
@@ -246,13 +249,16 @@
 
 ;;; ID search
 
+;; Returns list of nodes matching identifier ID.
+;; ID may be a symbol or string.
 (define (match-nodes id)
   (define (lookup id)
     (hash-table-ref/default (id-cache) id '()))
   (validate-id-cache!)
-  (map (lambda (x)
-         (lookup-node (append x (list id))))
-       (lookup id)))
+  (let ((id (if (string? id) (string->symbol id) id)))
+    (map (lambda (x)
+           (lookup-node (append x (list id))))
+         (lookup id))))
 
 ;; (define (search id)
 ;;   (for-each (lambda (x)

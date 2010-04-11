@@ -70,6 +70,19 @@
                  (close-output-pipe pipe)
                  rv))))))
 
+;;; Helpers
+
+;; Special lookup for command-line.  Treat args as a standard path list
+;; -but- if only one argument is provided, try to decompose it as a
+;; qualified path string.
+(define (lookup args)
+  (define (normalize-path p)
+    (cond ((null? p) p)
+          ((null? (cdr p))
+           (decompose-qualified-path (car p)))
+          (else p)))
+  (lookup-node (normalize-path args)))
+
 ;;; Main
 
 (when (null? (command-line-arguments))
@@ -84,18 +97,18 @@
  (lambda ()
    (let ((o (car (command-line-arguments))))
      (cond ((string=? o "-s")
-            (describe-signatures (list (lookup-node (cdr (command-line-arguments))))))
+            (describe-signatures (list (lookup (cdr (command-line-arguments))))))
            ((string=? o "-f")
-            ;; Is this useful?  Basically, identifier search on signatures, showing path
-            ;; I wonder if we need the signature, or just the path
-            (search-only (string->symbol (cadr (command-line-arguments)))))
+            ;; Is this useful?  Identifier search ("find") on signatures, showing path.
+            ;; I wonder if we need the signature, or just the path.
+            (search-only (cadr (command-line-arguments))))
            ((string=? o "-c")
-            (describe-contents (lookup-node (cdr (command-line-arguments)))))
+            (describe-contents (lookup (cdr (command-line-arguments)))))
            ((string=? o "-i")
             ;; FIXME: decompose-pathspec required here but won't work yet.
-            (describe (lookup-node (cdr (command-line-arguments)))))
+            (describe (lookup (cdr (command-line-arguments)))))
            (else
-            (let ((ids (map string->symbol (command-line-arguments))))
+            (let ((ids (command-line-arguments)))
               (if (null? (cdr ids))
                   (doc-dwim (car ids))
-                  (doc-dwim ids)))))) ))
+                  (doc-dwim ids))))))))
