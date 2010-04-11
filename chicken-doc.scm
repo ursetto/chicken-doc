@@ -6,6 +6,8 @@
 
 (module chicken-doc
 ;; Used by chicken-doc command
+*
+#;
 (verify-repository
  repository-base
  describe-signatures
@@ -19,12 +21,12 @@
  id-cache id-cache-filename id-cache-mtime id-cache-add-directory!
  path->keys keys->pathname field-filename keys+field->pathname
 ;; Other API
- signature
+ node-signature
  node-type
  )
 
 (import scheme chicken)
-(use matchable regex srfi-13 posix data-structures srfi-69 extras files utils)
+(use matchable regex srfi-13 posix data-structures srfi-69 extras files utils srfi-1)
 (import irregex)
 (import (only csi toplevel-command))
 
@@ -70,10 +72,7 @@
                                                  16)))))))
 
 (define (path->keys path)
-  (map id->key (if (or (null? path)
-                       (pair? path))
-                   path
-                   (string-split (->string path) "#"))))
+  (map id->key path))
 (define (keys->pathname keys)
   (make-pathname (cons (repository-root) keys) #f))
 (define (field-filename name)
@@ -83,43 +82,82 @@
 (define (keys+field->pathname keys field)  ;; should this take a path instead of keys?
   (pathname+field->pathname (keys->pathname keys) field))
 
+;; Turn pathspec (a path list or path string) into a path or id.
+;; Path lists pass through.  Qualified path strings (contains #) become
+;; path lists.  Unqualified path strings become ids (symbols).  An empty
+;; path string becomes () -- i.e. toplevel.
+(define (decompose-pathspec pathspec)
+  (if (pair? pathspec)
+      pathspec
+      (let ((p (string-split (if (symbol? pathspec)
+                                 (symbol->string pathspec) pathspec)
+                             "#")))
+        (cond ((null? p) p)
+              ((null? (cdr p)) (string->symbol (car p)))
+              (else p)))))
+
 ;;; Access
+
+(define-record-type chicken-doc-node
+  (make-node path id md)
+  node?
+  (path node-path)            ; includes ID
+  (id node-id)
+  (md node-md))
 
 ;; Return string list of child keys (directories) directly under PATH, or #f
 ;; if the PATH is invalid.
-(use srfi-1) ; filter
-(define (child-keys path)
-  (let* ((keys (path->keys path))
-         (dir (keys->pathname keys)))
-    (and (directory? dir)
-         (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
-                 (directory dir)))))
 
-(define (read-meta-key path key)
+(define (node-children node)
+  (define (path-child-keys path)
+    (let* ((keys (path->keys path))
+           (dir (keys->pathname keys)))
+      (and (directory? dir)
+           (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
+                   (directory dir)))))
+  (let ((path (node-path node)))
+    (map (lambda (k)
+           (lookup-node (append path (list (key->id k)))))
+         (path-child-keys path))))
+
+;; Obtain metadata alist at PATH.  Valid node without metadata record
+;; returns '().  Invalid node throws error.
+(define (read-path-metadata path)
   (let* ((keys (path->keys path))
          (pathname (keys->pathname keys))
          (metafile (pathname+field->pathname pathname 'meta)))
     (cond ((file-exists? metafile)
-           (let ((meta (with-input-from-file metafile read-file)))
-             (cond ((assq key meta) => cadr)
-                   (else #f))))
+           (with-input-from-file metafile read-file))
           ((directory? pathname)
            ;; write-keys may create intermediate container directories
            ;; without metadata, so handle this specially.
-           #f)
+           '())
           (else
            (error "No such identifier" path)))))
 
-;; Return string representing signature of PATH.
-(define (signature path)
-  (or (read-meta-key path 'signature)
+(define (node-metadata-field node field)
+  (cond ((assq field (node-metadata node))
+         => cadr)
+        (else #f)))
+
+(define node-metadata node-md)    ; Alternatively, load metadata as needed.
+
+;; Return node record at PATH or throw error if the record does
+;; not exist (implicitly in read-path-metadata).
+(define (lookup-node path)
+  (let ((id (if (null? path)
+                ""   ; TOC
+                (last path))))
+    (make-node path id (read-path-metadata path))))
+
+;; Return string representing signature of PATH.  If no signature, return "".
+(define (node-signature node)
+  (or (node-metadata-field node 'signature)
       ""))
 
 ;; Return symbol representing type of PATH, or 'unknown.
-;; This is a stop-gap, as we would actually like to pass node records
-;; around so we don't have to read the file for every access.
-(define (node-type path)
-  (let ((key (read-meta-key path 'type)))
+(define (node-type node)
+  (let ((key (node-metadata-field node 'type)))
     (if key
         (if (string? key)
             (string->symbol key)
@@ -140,14 +178,16 @@
     (lambda ()
       (for-each-line (lambda (x) (display x) (newline))))))
 
-;; Display the "text" field of PATH to current-output-port
-(define (describe path)
-  (let* ((keys (path->keys path))
-         (textfile (keys+field->pathname keys 'text)))
-    (cond ((and (file-exists? textfile))
-           (cat textfile))   ;; (Signature is embedded in text body)
-          (else
-           (error "No such identifier" path)))))
+;; Display the "text" field of NODE to current-output-port.  Even if
+;; NODE is a valid node, that doesn't mean it has text contents.
+(define (describe node)
+  (let ((path (node-path node)))
+    (let* ((keys (path->keys path))
+           (textfile (keys+field->pathname keys 'text)))
+      (cond ((and (file-exists? textfile))
+             (cat textfile))   ;; (Signature is embedded in text body)
+            (else
+             (error "No such identifier" path))))))
 
 ;; Display the signature of all child keys of PATH, to stdout.
 ;; NB: if we change path->keys to assume strings inside a path are already keys,
@@ -157,28 +197,26 @@
 (define (padding len s)
   (make-string (max 0 (- len (string-length s)))
                #\space))
-(define (describe-contents path)
-  (let ((ids (map key->id (or (child-keys path)
-                              (error "No such path" path)))))
-    (let* ((strids (map ->string ids))
+(define (describe-contents node)
+  (let ((kids (node-children node)))
+    (let* ((strids (map ->string (map node-id kids)))
            (len (maximum-string-length strids)))
-      (for-each (lambda (i s) (print s (padding len s)
+      (for-each (lambda (n s) (print s (padding len s)
                                 "  "
-                                (signature (append path
-                                                   (list i)))))
-                ids strids))))
+                                (node-signature n)))
+                kids strids))))
 
-(define (describe-signatures paths)   ; ((srfi-69 hash-table-ref) (synch synch) (posix))
-  (let* ((strpaths (map ->string paths))
+(define (describe-signatures nodes)
+  (let* ((strpaths (map ->string (map node-path nodes)))
          (len (maximum-string-length strpaths)))
-    (for-each (lambda (p s) (print s (padding len s)
+    (for-each (lambda (n s) (print s (padding len s)
                               "  "
-                              (signature p)))
-              paths strpaths)))
+                              (node-signature n)))
+              nodes strpaths)))
 
-(define (describe-matches paths)
-  (print "Found " (length paths) " matches:")
-  (describe-signatures paths))
+(define (describe-matches nodes)
+  (print "Found " (length nodes) " matches:")
+  (describe-signatures nodes))
 
 ;;; ID search cache
 
@@ -208,15 +246,13 @@
 
 ;;; ID search
 
-(define (lookup id)
-  (define (lookup/raw id)
-    (hash-table-ref/default (id-cache) id #f))
+(define (match-nodes id)
+  (define (lookup id)
+    (hash-table-ref/default (id-cache) id '()))
   (validate-id-cache!)
-  (cond ((lookup/raw id) => (lambda (path)
-                              ;; reconstruct full path by appending ID
-                              (map (lambda (x) (append x (list id)))
-                                   path)))
-        (else '())))
+  (map (lambda (x)
+         (lookup-node (append x (list id))))
+       (lookup id)))
 
 ;; (define (search id)
 ;;   (for-each (lambda (x)
@@ -225,41 +261,32 @@
 ;;             (lookup id)))
 
 (define (search-and-describe id)
-  (let ((entries (lookup id)))
-    (cond ((null? entries)
+  (let ((nodes (match-nodes id)))
+    (cond ((null? nodes)
            (error "No such identifier" id))
-          ((null? (cdr entries))
-           (print "path: " (car entries))
-           (describe (car entries)))
+          ((null? (cdr nodes))
+           (print "path: " (node-path (car nodes)))
+           (describe (car nodes)))
           (else
-           (describe-matches entries)))))
+           (describe-matches nodes)))))
 (define (search-only id)
-  (let ((entries (lookup id)))
-    (describe-signatures entries)))
+  (let ((nodes (match-nodes id)))
+    (describe-signatures nodes)))
 (define (search-and-describe-contents id)
-  (let ((entries (lookup id)))
-    (cond ((null? entries)
+  (let ((nodes (match-nodes id)))
+    (cond ((null? nodes)
            (void))
-          ((null? (cdr entries))
-           (print "path: " (car entries))
-           (describe-contents (car entries)))
+          ((null? (cdr nodes))
+           (print "path: " (car nodes))
+           (describe-contents (car nodes)))
           (else
-           (describe-matches entries)))))
+           (describe-matches nodes)))))
 
-(define (doc-dwim path)
-  (cond ((or (null? path)
-             (pair? path))
-         (describe path))
-        (else
-         ;; Again, we could use path->keys IF it did not convert strings.
-         ;; As is, strings would be double-converted.  However, that is
-         ;; dangerous because we do not want to write illegal characters to files.
-         ;; Thus we split the ID manually, relying on callee to convert to keys.
-         (let ((id-strings (string-split (->string path) "#")))
-           (if (or (null? id-strings)
-                   (pair? (cdr id-strings)))
-               (describe id-strings)
-               (search-and-describe (string->symbol (car id-strings))))))))
+(define (doc-dwim pathspec)
+  (let ((p (decompose-pathspec pathspec)))
+    (if (or (pair? p) (null? p))
+        (describe (lookup-node p))
+        (search-and-describe p))))
 
 ;;; Repository
 
@@ -285,12 +312,13 @@
 
 (define repl-doc-dwim doc-dwim)
 (define repl-toc-dwim            ;; FIXME: ignore # paths for now
-  (lambda (path)
-    (cond ((or (null? path)
-               (pair? path))
-           (describe-contents path))
-          (else
-           (search-and-describe-contents path)))))
+  (lambda (pathspec)
+    (let ((p (decompose-pathspec pathspec)))
+      (cond ((or (null? p)
+                 (pair? p))
+             (describe-contents (lookup-node p)))
+            (else
+             (search-and-describe-contents p))))))
 
 (when (feature? 'csi)
   ;; Warning -- will execute if called from a script.
@@ -298,10 +326,10 @@
   (set-chicken-doc-repository! (repository-base) ;; (locate-repository)
                           )
   (toplevel-command 'doc (lambda () (repl-doc-dwim (read)))
-                    ",doc PATH         Describe identifier or path with chicken-doc")
+                    ",doc PATHSPEC     Describe identifier or path with chicken-doc")
   (toplevel-command 'toc (lambda () (repl-toc-dwim (read)))
                     ;; TOC should look up if this is a relative path
-                    ",toc PATH         List contents of path"))
+                    ",toc PATHSPEC     List contents of path"))
 
 )  ;; end module
 

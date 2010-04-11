@@ -84,16 +84,16 @@
  (lambda ()
    (let ((o (car (command-line-arguments))))
      (cond ((string=? o "-s")
-            (describe-signatures (list (map string->symbol
-                                            (cdr (command-line-arguments))))))
+            (describe-signatures (list (lookup-node (cdr (command-line-arguments))))))
            ((string=? o "-f")
             ;; Is this useful?  Basically, identifier search on signatures, showing path
             ;; I wonder if we need the signature, or just the path
             (search-only (string->symbol (cadr (command-line-arguments)))))
            ((string=? o "-c")
-            (describe-contents (map string->symbol (cdr (command-line-arguments)))))
+            (describe-contents (lookup-node (cdr (command-line-arguments)))))
            ((string=? o "-i")
-            (describe (map string->symbol (cdr (command-line-arguments)))))
+            ;; FIXME: decompose-pathspec required here but won't work yet.
+            (describe (lookup-node (cdr (command-line-arguments)))))
            (else
             (let ((ids (map string->symbol (command-line-arguments))))
               (if (null? (cdr ids))
