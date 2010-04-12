@@ -186,7 +186,7 @@
 (define (describe node)
   (let ((path (node-path node)))
     (let* ((keys (path->keys path))
-           (textfile (keys+field->pathname keys 'text)))
+           (textfile (keys+field->pathname keys 'sxml)))
       (cond ((and (file-exists? textfile))
              (cat textfile))   ;; (Signature is embedded in text body)
             (else
@@ -296,7 +296,7 @@
 
 ;;; Repository
 
-(define repository-version 1)
+(define repository-version 2)
 (define repository-information (make-parameter '()))
 (define (repository-magic)
   (make-pathname (repository-base) ".chicken-doc-repo"))
