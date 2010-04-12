@@ -58,9 +58,10 @@
                  (('dd . def)
                   (loop (cdr dl) L dt (cons def dd)))))))
                            
-  (let ((wrap (and wrap (not (zero? wrap)) (max wrap 0)))
-        (list-indent (make-parameter 2))
-        (drop-tag (lambda x '())))
+  (let* ((wrap (and wrap (not (zero? wrap)) (max wrap 0)))
+         (list-indent (make-parameter 2))
+         (drop-tag (lambda x '()))
+         (hr-glyph (if wrap (make-string wrap #\-) "--------")))
     (letrec
         ((ss 
           `((section . ,(lambda (tag level name . body)
@@ -146,6 +147,10 @@
                                +identifier-tags+))
                        . ,(lambda (tag . body) (list body #\newline))))
                  . ,(lambda (tag . body) body))
+
+            (hr .
+                ,(lambda (tag)
+                   `(#\newline ,hr-glyph #\newline)))
             (tags . ,drop-tag)
             (toc . ,drop-tag)
             
