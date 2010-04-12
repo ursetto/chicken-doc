@@ -25,6 +25,8 @@
  node-type
 ;; Other API
  decompose-qualified-path
+;; Parameters
+ wrap-column
  )
 
 (import scheme chicken)
@@ -34,6 +36,8 @@
 
 ;;; Config
 
+(define wrap-column
+  (make-parameter 0))
 (define repository-base
   (make-parameter #f))
 
@@ -189,7 +193,8 @@
     (let* ((keys (path->keys path))
            (file (keys+field->pathname keys 'sxml)))
       (cond ((and (file-exists? file))
-             (display-sxml-as-text (read-file file))) ;; (Signature is embedded in text body)
+             (display-sxml-as-text (read-file file)
+                                   (wrap-column)))
             (else
              (error "No such identifier" path))))))
 

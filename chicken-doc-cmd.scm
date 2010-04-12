@@ -70,6 +70,17 @@
                  (close-output-pipe pipe)
                  rv))))))
 
+;;; Wrapping
+
+(define (determine-wrap-column)
+  (cond ((get-environment-variable "CHICKEN_DOC_WRAP")
+         => string->number)
+        (else
+         (let-values (((rows cols) (terminal-size (current-input-port))))
+           (if (= cols 0)
+               76       ; (* 80 0.95)
+               (inexact->exact (truncate (* cols 0.95))))))))
+
 ;;; Helpers
 
 ;; Special lookup for command-line.  Treat args as a standard path list
@@ -92,6 +103,8 @@
   (fprintf (current-error-port) "No repository found at ~a\n"
            (repository-base))
   (exit 1))
+
+(wrap-column (determine-wrap-column))
 
 (with-output-to-pager
  (lambda ()

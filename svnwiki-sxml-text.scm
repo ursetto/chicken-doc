@@ -13,7 +13,7 @@
 ;; us obtain the current stylesheet bindings, so we must approximate
 ;; them with a letrec
 (define (make-text-stylesheet doc #!key (wrap 78))
-  (let ((wrap (and wrap (max wrap 0)))
+  (let ((wrap (and wrap (not (zero? wrap)) (max wrap 0)))
         (list-depth (make-parameter 0))
         (flatten (lambda (frags) (with-output-to-string (lambda () (SRV:send-reply frags)))))
         (drop-tag (lambda x '())))
@@ -135,14 +135,7 @@
             )))
       ss)))
 
-(use posix)
-(define (wrap-at)
-  (let-values (((rows cols) (terminal-size (current-input-port))))
-    (if (= cols 0)
-        78
-        (inexact->exact (truncate (* cols 0.95))))))
-
-(define (display-sxml-as-text doc)
+(define (display-sxml-as-text doc wrap-col)
   (SRV:send-reply
    (pre-post-order doc
-                   (make-text-stylesheet doc wrap: (wrap-at)))))
+                   (make-text-stylesheet doc wrap: wrap-col))))
