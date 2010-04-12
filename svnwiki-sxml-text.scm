@@ -37,6 +37,23 @@
                                     (- wrap plen)
                                     (wrap-lines line1))))
                 ,rest)))))))
+  (define (extract-dl-items dl)  ; returns ( (term . defs) ...)
+    (let loop ((dl dl)
+               (L '())
+               (dt #f)    ; the unknown term
+               (dd '()))
+      (if (null? dl)
+          (if dt
+              (let ((L (cons (cons dt (reverse dd)) L))) ; remaining dt
+                (reverse L))
+              '())
+          (match (car dl)
+                 (('dt . term)
+                  (if dt
+                      (loop (cdr dl) (cons (cons dt (reverse dd)) L) term '())
+                      (loop (cdr dl) L term '())))    ; skip until first dt
+                 (('dd . def)
+                  (loop (cdr dl) L dt (cons def dd)))))))
                            
   (let ((wrap (and wrap (not (zero? wrap)) (max wrap 0)))
         (list-indent (make-parameter 0))
