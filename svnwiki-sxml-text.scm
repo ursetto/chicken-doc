@@ -1,17 +1,7 @@
 (use fmt)
 (use sxml-transforms)
-(use svnwiki-sxml)
-(use ports)
-(use data-structures)
 (use matchable)
-
-;; (define p (open-input-file "list.wiki"))
-;; (define p (open-input-file "def.wiki"))
-;; (define p (open-input-file "sql-de-lite"))
-;; (define p (open-input-file "bb"))
-(define p (open-input-file (car (command-line-arguments))))
-
-(define doc (time (svnwiki->sxml p)))
+(use ports) ;with-output-to-string
 
 (define +identifier-tags+
   (map string->symbol
@@ -22,7 +12,7 @@
 ;; use parameters and preorder traversal; it also does not let
 ;; us obtain the current stylesheet bindings, so we must approximate
 ;; them with a letrec
-(define (make-ss doc #!key (wrap 78))
+(define (make-text-stylesheet doc #!key (wrap 78))
   (let ((wrap (and wrap (max wrap 0)))
         (list-depth (make-parameter 0))
         (flatten (lambda (frags) (with-output-to-string (lambda () (SRV:send-reply frags)))))
@@ -151,7 +141,8 @@
     (if (= cols 0)
         78
         (inexact->exact (truncate (* cols 0.95))))))
-(time
- (SRV:send-reply
-  (pre-post-order doc
-                  (make-ss doc wrap: (wrap-at)))))
+
+(define (display-sxml-as-text doc)
+  (SRV:send-reply
+   (pre-post-order doc
+                   (make-text-stylesheet doc wrap: (wrap-at)))))

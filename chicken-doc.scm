@@ -130,7 +130,7 @@
          (pathname (keys->pathname keys))
          (metafile (pathname+field->pathname pathname 'meta)))
     (cond ((file-exists? metafile)
-           (with-input-from-file metafile read-file))
+           (read-file metafile))
           ((directory? pathname)
            ;; write-keys may create intermediate container directories
            ;; without metadata, so handle this specially.
@@ -183,12 +183,13 @@
 
 ;; Display the "text" field of NODE to current-output-port.  Even if
 ;; NODE is a valid node, that doesn't mean it has text contents.
+(include "svnwiki-sxml-text.scm")
 (define (describe node)
   (let ((path (node-path node)))
     (let* ((keys (path->keys path))
-           (textfile (keys+field->pathname keys 'sxml)))
-      (cond ((and (file-exists? textfile))
-             (cat textfile))   ;; (Signature is embedded in text body)
+           (file (keys+field->pathname keys 'sxml)))
+      (cond ((and (file-exists? file))
+             (display-sxml-as-text (read-file file))) ;; (Signature is embedded in text body)
             (else
              (error "No such identifier" path))))))
 
