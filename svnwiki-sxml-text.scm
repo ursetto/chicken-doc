@@ -13,9 +13,33 @@
 ;; us obtain the current stylesheet bindings, so we must approximate
 ;; them with a letrec
 (define (make-text-stylesheet doc #!key (wrap 78))
+  (define (flatten-frags frags)
+    (with-output-to-string (lambda () (SRV:send-reply frags))))
+  (define (indent-and-wrap-with-bullet indent wrap prefix items)
+    ;; we could have caller combine indent and prefix into prefix
+    (define (split-first-line s)
+      (cond ((string-index s #\newline)
+             => (lambda (i) (cons (substring s 0 i)
+                             (substring s (+ i 1)))))
+            (else (cons s #f))))
+    (let* ((prefix (string-append (make-string indent #\space) prefix)))
+      (if (not wrap)
+          `(,prefix ,items #\newline)
+          (match
+           (split-first-line (flatten-frags items))
+           ((line1 . rest)
+               ;; Explicit with-width works around a bug(?) where the
+               ;; second column does not expand to fill the available
+               ;; width.
+            (let ((plen (string-length prefix)))
+              `(,(fmt #f (columnar plen (dsp prefix)
+                                   (with-width
+                                    (- wrap plen)
+                                    (wrap-lines line1))))
+                ,rest)))))))
+                           
   (let ((wrap (and wrap (not (zero? wrap)) (max wrap 0)))
-        (list-depth (make-parameter 0))
-        (flatten (lambda (frags) (with-output-to-string (lambda () (SRV:send-reply frags)))))
+        (list-indent (make-parameter 0))
         (drop-tag (lambda x '())))
     (letrec
         ((ss 
@@ -31,51 +55,26 @@
                             " " ,name #\newline ,body)))
             (ul *preorder* .
                 ,(lambda (tag . items)
-                   (parameterize ((list-depth (+ (list-depth) 1)))
-                     `(#\newline
-                       ,(pre-post-order
-                         items
-                         (let* ((prefix (string-append
-                                         (make-string (* 2 (- (list-depth) 1))
-                                                      #\space)
-                                         "* "))
-                                (split-first-line ; return (line1 . rest) or (line1 . #f)
-                                 (lambda (s)
-                                   (cond ((string-index s #\newline)
-                                          => (lambda (i) (cons (substring s 0 i)
-                                                          (substring s (+ i 1)))))
-                                         (else (cons s #f)))))
-                                )
-                           `((li
-                              . ,(lambda (tag . items)
-                                   (if (not wrap)
-                                       `(,prefix ,items #\newline)
-                                       (match
-                                        (split-first-line (flatten items))
-                                        ((line1 . rest)
-                                         ;; Explicit with-width works around a bug(?)
-                                         ;; where the second column does not expand to
-                                         ;; fill the available width.
-                                         (let ((plen (string-length prefix)))
-                                           `(,(fmt #f (columnar plen (dsp prefix)
-                                                                (with-width
-                                                                 (- wrap plen)
-                                                                 (wrap-lines line1))))
-                                             ,rest))))
-)))
-                             . ,ss ; actually, other block elts should be disallowed in UL
-                             )))))))
+                   (let ((indent (list-indent))
+                         (prefix "* "))
+                     (parameterize ((list-indent (+ indent (string-length prefix))))
+                       `(#\newline
+                         ,(pre-post-order
+                           items
+                           `((li . ,(lambda (tag . items)
+                                      (indent-and-wrap-with-bullet indent wrap "* " items)))
+                             . ,ss)))))))
             (ol *preorder* .
                 ,(lambda (tag . items)
-                   (parameterize ((list-depth (+ (list-depth) 1)))
-                     (pre-post-order items
-                                     `((li . ,(lambda (tag . items)
-                                                `(#\newline
-                                                  ,(make-string (* 2 (- (list-depth) 1))
-                                                                #\space)
-                                                  "1. "
-                                                  ,items)))
-                                       . ,ss)))))
+                   (let ((indent (list-indent))
+                         (prefix "1. "))
+                     (parameterize ((list-indent (+ indent (string-length prefix))))
+                       `(#\newline
+                         ,(pre-post-order
+                           items
+                           `((li . ,(lambda (tag . items)
+                                      (indent-and-wrap-with-bullet indent wrap prefix items)))
+                             . ,ss)))))))
             (dl ((dt . ,(lambda (tag . body)
                           `(#\newline "- " ,body ": ")))
                  (dd . ,(lambda (tag . body)
@@ -84,7 +83,7 @@
                      body))
             
             (p . ,(lambda (tag . body)
-                    (let ((str (flatten body)))  ; FIXME remove if no wrap
+                    (let ((str (flatten-frags body)))  ; FIXME remove if no wrap
                       `(#\newline
                         ,(if wrap
                              (if (string=? str "")
@@ -93,7 +92,7 @@
                              (list str #\newline)))))) ; need extra NL if no wrap-lines
             (pre . ,(lambda (tag . body)
                       `(#\newline "    "  ; dumb
-                        ,(string-intersperse (string-split (flatten body) "\n" #t)
+                        ,(string-intersperse (string-split (flatten-frags body) "\n" #t)
                                              "\n    ")
                         #\newline ; hmm
                         )
@@ -101,7 +100,7 @@
             (script . ,(lambda (tag lang . body)
                          ;; use PRE output for now; ignore LANG
                          `(#\newline "    "  ; dumb
-                           ,(string-intersperse (string-split (flatten body) "\n" #t)
+                           ,(string-intersperse (string-split (flatten-frags body) "\n" #t)
                                                 "\n    ")
                            #\newline ; hmm
                            )
