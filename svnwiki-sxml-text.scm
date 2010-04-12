@@ -26,17 +26,20 @@
       (if (not wrap)
           `(,prefix ,items #\newline)
           (match
+           ;; split required to extract indented lists in items ("rest") -- rethink this?
            (split-first-line (flatten-frags items))
            ((line1 . rest)
-               ;; Explicit with-width works around a bug(?) where the
-               ;; second column does not expand to fill the available
-               ;; width.
-            (let ((plen (string-length prefix)))
-              `(,(fmt #f (columnar plen (dsp prefix)
-                                   (with-width
-                                    (- wrap plen)
-                                    (wrap-lines line1))))
-                ,rest)))))))
+            ;; Explicit with-width works around a bug(?) where the
+            ;; second column does not expand to fill the available
+            ;; width.
+            (if (string=? "" line1)
+                `(,prefix ,items #\newline)   ; avoid fmt BUG: error on (wrap-lines "")
+                (let ((plen (string-length prefix)))
+                  `(,(fmt #f (columnar plen (dsp prefix)
+                                       (with-width
+                                        (- wrap plen)
+                                        (wrap-lines line1))))
+                    ,rest))))))))
   (define (extract-dl-items dl)  ; returns ( (term . defs) ...)
     (let loop ((dl dl)
                (L '())
@@ -93,6 +96,20 @@
                          (parse-LIs items (lambda (i) (string-append
                                                  (number->string i) ". ")))))))
 
+            (dl *preorder* .
+                ,(lambda (tag . items)
+                   `(#\newline
+                     ,(map (match-lambda
+                            ((term . defs)
+                             (let ((prefix (string-append
+                                            "- " (flatten-frags (pre-post-order term ss))
+                                            ": ")))
+                                       (indent-and-wrap-with-bullet
+                                        2 wrap prefix
+                                        ; FIXME: multiple defs should be displayed separately
+                                        (pre-post-order defs ss)))))
+                           (extract-dl-items items)))))
+            
             (dl ((dt . ,(lambda (tag . body)
                           `(#\newline "- " ,body ": ")))
                  (dd . ,(lambda (tag . body)
