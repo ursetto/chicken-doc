@@ -59,7 +59,7 @@
                   (loop (cdr dl) L dt (cons def dd)))))))
                            
   (let ((wrap (and wrap (not (zero? wrap)) (max wrap 0)))
-        (list-indent (make-parameter 0))
+        (list-indent (make-parameter 2))
         (drop-tag (lambda x '())))
     (letrec
         ((ss 
@@ -105,7 +105,7 @@
                                             "- " (flatten-frags (pre-post-order term ss))
                                             ": ")))
                                        (indent-and-wrap-with-bullet
-                                        2 wrap prefix
+                                        (list-indent) wrap prefix
                                         ; FIXME: multiple defs should be displayed separately
                                         (pre-post-order defs ss)))))
                            (extract-dl-items items)))))
