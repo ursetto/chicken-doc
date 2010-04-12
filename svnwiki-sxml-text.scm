@@ -57,24 +57,33 @@
                 ,(lambda (tag . items)
                    (let ((indent (list-indent))
                          (prefix "* "))
-                     (parameterize ((list-indent (+ indent (string-length prefix))))
-                       `(#\newline
-                         ,(pre-post-order
-                           items
-                           `((li . ,(lambda (tag . items)
-                                      (indent-and-wrap-with-bullet indent wrap "* " items)))
-                             . ,ss)))))))
-            (ol *preorder* .
+                     `(#\newline
+                       ,(pre-post-order
+                         items
+                         `((li *preorder* .
+                               ,(lambda (tag . items)
+                                  (indent-and-wrap-with-bullet
+                                   indent wrap prefix
+                                   (parameterize ((list-indent
+                                                   (+ indent (string-length prefix))))
+                                     (pre-post-order items ss)))))))))))
+            (ol *preorder* .            ; exactly like UL but with extra counter
                 ,(lambda (tag . items)
-                   (let ((indent (list-indent))
-                         (prefix "1. "))
-                     (parameterize ((list-indent (+ indent (string-length prefix))))
-                       `(#\newline
-                         ,(pre-post-order
-                           items
-                           `((li . ,(lambda (tag . items)
-                                      (indent-and-wrap-with-bullet indent wrap prefix items)))
-                             . ,ss)))))))
+                   (let ((index 0)
+                         (indent (list-indent)))
+                     `(#\newline
+                       ,(pre-post-order
+                         items
+                         `((li *preorder* .
+                               ,(lambda (tag . items)
+                                  (set! index (+ index 1)) ; grr
+                                  (let ((prefix (string-append (number->string index)
+                                                               ". ")))
+                                    (indent-and-wrap-with-bullet
+                                     indent wrap prefix
+                                     (parameterize ((list-indent
+                                                     (+ indent (string-length prefix))))
+                                       (pre-post-order items ss))))))))))))
             (dl ((dt . ,(lambda (tag . body)
                           `(#\newline "- " ,body ": ")))
                  (dd . ,(lambda (tag . body)
@@ -115,7 +124,7 @@
             (toc . ,drop-tag)
             
 ;;; inline elts
-            (b . ,(lambda (tag . body) `("*" ,body "*")))
+            (b . ,(lambda (tag . body) `("_" ,body "_")))
             (i . ,(lambda (tag . body) `("/" ,body "/")))
             (tt . ,(lambda (tag . body) `("`" ,body "`")))
 
