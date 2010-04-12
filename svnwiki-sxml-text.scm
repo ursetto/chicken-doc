@@ -53,37 +53,29 @@
                                ((6) "======")
                                (else "======"))
                             " " ,name #\newline ,body)))
-            (ul *preorder* .
-                ,(lambda (tag . items)
-                   (let ((indent (list-indent))
-                         (prefix "* "))
-                     `(#\newline
-                       ,(pre-post-order
-                         items
-                         `((li *preorder* .
-                               ,(lambda (tag . items)
-                                  (indent-and-wrap-with-bullet
-                                   indent wrap prefix
-                                   (parameterize ((list-indent
-                                                   (+ indent (string-length prefix))))
-                                     (pre-post-order items ss)))))))))))
-            (ol *preorder* .            ; exactly like UL but with extra counter
-                ,(lambda (tag . items)
-                   (let ((index 0)
-                         (indent (list-indent)))
-                     `(#\newline
-                       ,(pre-post-order
-                         items
-                         `((li *preorder* .
-                               ,(lambda (tag . items)
-                                  (set! index (+ index 1)) ; grr
-                                  (let ((prefix (string-append (number->string index)
-                                                               ". ")))
-                                    (indent-and-wrap-with-bullet
-                                     indent wrap prefix
-                                     (parameterize ((list-indent
-                                                     (+ indent (string-length prefix))))
-                                       (pre-post-order items ss))))))))))))
+            ,@(let ((parse-LIs
+                     (lambda (items prefix)
+                       (let ((index 0))
+                         `(#\newline
+                           ,(pre-post-order
+                             items
+                             `((li *preorder* .
+                                   ,(lambda (tag . items)
+                                      (set! index (+ index 1)) ; grr
+                                      (let ((p (prefix index))
+                                            (i (list-indent)))
+                                        (indent-and-wrap-with-bullet
+                                         i wrap p
+                                         (parameterize ((list-indent (+ i (string-length p))))
+                                           (pre-post-order items ss)))))))))))))
+                `((ul *preorder* .
+                      ,(lambda (tag . items)
+                         (parse-LIs items (lambda (i) "* "))))
+                  (ol *preorder* .
+                      ,(lambda (tag . items)
+                         (parse-LIs items (lambda (i) (string-append
+                                                 (number->string i) ". ")))))))
+
             (dl ((dt . ,(lambda (tag . body)
                           `(#\newline "- " ,body ": ")))
                  (dd . ,(lambda (tag . body)
