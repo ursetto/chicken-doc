@@ -37,7 +37,7 @@
 ;;; Config
 
 (define wrap-column
-  (make-parameter 0))
+  (make-parameter 76))   ; 0 or #f for no wrapping
 (define repository-base
   (make-parameter #f))
 
