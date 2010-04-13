@@ -61,6 +61,9 @@
                       (loop (cdr dl) L term '())))    ; skip until first dt
                  (('dd . def)
                   (loop (cdr dl) L dt (cons def dd)))))))
+  ;; special formatter for table top/bottom
+  (define (fill char) (lambda (st) ((cat (make-string (fmt-width st) char)) st)))
+  ;(define (fill char) (lambda (st) ((pad-char char (pad/both (fmt-width st))) st)))
                            
   (let* ((wrap (and wrap (not (zero? wrap)) (max wrap 0)))
          (list-indent (make-parameter 2))
@@ -164,7 +167,11 @@
                       ;; FIXME: assumes wrap!
                       (list
                        #\newline
-                       ;hr-glyph #\newline
+                       #;
+                       (fmt #f (with-width wrap
+                                           (columnar "+-" (fill #\-) "-+-"
+                                                     (fill #\-) "-+-"
+                                                     (fill #\-) "-+")))
                        (map
                         (match-lambda (('tr . tds)
                                   (fmt #f
