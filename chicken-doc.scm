@@ -4,6 +4,8 @@
 ;; such as id->key.  Furthermore even certain regular things shouldn't
 ;; be exported to the REPL.
 
+(include "chicken-doc-text.scm") ; local module
+
 (module chicken-doc
 ;; Used by chicken-doc command
 
@@ -33,6 +35,7 @@
 (use matchable regex srfi-13 posix data-structures srfi-69 extras files utils srfi-1)
 (import irregex)
 (import (only csi toplevel-command))
+(import chicken-doc-text)
 
 ;;; Config
 
@@ -187,7 +190,6 @@
 
 ;; Display the "text" field of NODE to current-output-port.  Even if
 ;; NODE is a valid node, that doesn't mean it has text contents.
-(include "svnwiki-sxml-text.scm")
 (define (describe node)
   (let ((path (node-path node)))
     (let* ((keys (path->keys path))

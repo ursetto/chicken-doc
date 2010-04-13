@@ -1,7 +1,10 @@
+(module chicken-doc-text (display-sxml-as-text)
+
+(import scheme chicken)
 (use fmt)
 (use sxml-transforms)
 (use matchable)
-(use ports) ;with-output-to-string
+(use data-structures srfi-13 ports)
 
 (define +identifier-tags+
   (map string->symbol
@@ -178,3 +181,8 @@
   (SRV:send-reply
    (pre-post-order doc
                    (make-text-stylesheet doc wrap: wrap-col))))
+
+
+
+
+)
