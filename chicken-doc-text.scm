@@ -67,11 +67,15 @@
                           (filter-map
                            (match-lambda (('td . body)
                                      (flatten-frags (pre-post-order body ss)))
+                                    ;; we don't pass the "th" identity back, so we can't
+                                    ;; do further processing, such as centering
+                                    (('th . body)
+                                     (string-upcase
+                                      (flatten-frags (pre-post-order body ss))))
                                     (else #f))
                            tds))
                          (else #f))
                 table))
-
   ;; special formatter for table top/bottom
   (define (fill char) (lambda (st) ((cat (make-string (fmt-width st) char)) st)))
   ;(define (fill char) (lambda (st) ((pad-char char (pad/both (fmt-width st))) st)))
