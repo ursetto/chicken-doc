@@ -174,6 +174,12 @@
             key)
         'unknown)))
 
+(define (node-sxml node)
+  (let* ((keys (path->keys (node-path node)))
+         (file (keys+field->pathname keys 'sxml)))
+    (and (file-exists? file)
+         (read-file file))))
+
 ;;; Describe
 
 ;; Utility procedure (dropped in Chicken >= 4.3.2)
@@ -191,18 +197,14 @@
 ;; Display the "text" field of NODE to current-output-port.  Even if
 ;; NODE is a valid node, that doesn't mean it has text contents.
 (define (describe node)
-  (let ((path (node-path node)))
-    (let* ((keys (path->keys path))
-           (file (keys+field->pathname keys 'sxml)))
-      (cond ((and (file-exists? file))
-             (display-sxml-as-text (read-file file)
-                                   (wrap-column)))
-            (else
-             (error "No such identifier" path))))))
+  (cond ((node-sxml node)
+         => (lambda (doc)
+              (write-sxml-as-text doc (wrap-column))))
+        (else
+         (error "No such identifier"
+                (sprintf "~a" (node-path node))))))
 
 ;; Display the signature of all child keys of PATH, to stdout.
-;; NB: if we change path->keys to assume strings inside a path are already keys,
-;; we could avoid the key->id->key conversion in SIGNATURE.
 (define (maximum-string-length strs)
   (reduce max 0 (map string-length strs)))
 (define (padding len s)
@@ -344,6 +346,7 @@
   (toplevel-command 'toc (lambda () (repl-toc-dwim (read)))
                     ;; TOC should look up if this is a relative path
                     ",toc PATHSPEC     List contents of path"))
+
 
 )  ;; end module
 

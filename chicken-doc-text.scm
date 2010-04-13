@@ -1,4 +1,4 @@
-(module chicken-doc-text (display-sxml-as-text)
+(module chicken-doc-text (write-sxml-as-text)
 
 (import scheme chicken)
 (use fmt)
@@ -177,12 +177,9 @@
             )))
       ss)))
 
-(define (display-sxml-as-text doc wrap-col)
+(define (write-sxml-as-text doc wrap-col)
   (SRV:send-reply
    (pre-post-order doc
                    (make-text-stylesheet doc wrap: wrap-col))))
-
-
-
 
 )
