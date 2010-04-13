@@ -5,6 +5,7 @@
 (use sxml-transforms)
 (use matchable)
 (use data-structures srfi-13 ports)
+(use (only srfi-1 filter-map))
 
 (define +identifier-tags+
   (map string->symbol
@@ -154,6 +155,39 @@
             (hr .
                 ,(lambda (tag)
                    `(#\newline ,hr-glyph #\newline)))
+
+;; (fmt #f (columnar "| " (wrap-lines col1) " | " (wrap-lines col2)
+;;                   " | " (wrap-lines col3) " |"))
+
+            (table *preorder* .
+                   ,(lambda (tag . elts)
+                      ;; FIXME: assumes wrap!
+                      (list
+                       #\newline
+                       ;hr-glyph #\newline
+                       (map
+                        (match-lambda (('tr . tds)
+                                  (fmt #f
+                                       (with-width
+                                        wrap
+                                        (apply columnar
+                                               `("| "
+                                                 ;; write as loop?
+                                                 ,@(intersperse (filter-map
+                                                                 (match-lambda
+                                                                      (('td . body)
+                                                                       ;; FIXME: only allow inline elts
+                                                                       (wrap-lines (flatten-frags
+                                                                                    (pre-post-order body ss))))
+                                                                      (else #f))
+                                                                 tds)
+                                                                " | ")
+                                                 " |")))))
+                                 (else ""))
+                        elts)
+                       ;hr-glyph
+                       #\newline)))
+
             (tags . ,drop-tag)
             (toc . ,drop-tag)
             
