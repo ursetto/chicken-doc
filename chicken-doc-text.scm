@@ -5,7 +5,7 @@
 (use sxml-transforms)
 (use matchable)
 (use data-structures srfi-13 ports)
-(use (only srfi-1 filter-map))
+(use (only srfi-1 filter-map reduce make-list))
 
 (define +identifier-tags+
   (map string->symbol
@@ -61,6 +61,17 @@
                       (loop (cdr dl) L term '())))    ; skip until first dt
                  (('dd . def)
                   (loop (cdr dl) L dt (cons def dd)))))))
+  (define (extract-table-items table ss)  ;; returns ( (td td ...) (td td ...) )
+                                          ;; with TD flattened into strings and wrapped
+    (filter-map (match-lambda (('tr . tds)
+                          (filter-map
+                           (match-lambda (('td . body)
+                                     (flatten-frags (pre-post-order body ss)))
+                                    (else #f))
+                           tds))
+                         (else #f))
+                table))
+
   ;; special formatter for table top/bottom
   (define (fill char) (lambda (st) ((cat (make-string (fmt-width st) char)) st)))
   ;(define (fill char) (lambda (st) ((pad-char char (pad/both (fmt-width st))) st)))
@@ -162,38 +173,42 @@
 ;; (fmt #f (columnar "| " (wrap-lines col1) " | " (wrap-lines col2)
 ;;                   " | " (wrap-lines col3) " |"))
 
+            
             (table *preorder* .
                    ,(lambda (tag . elts)
                       ;; FIXME: assumes wrap!
-                      (list
-                       #\newline
-                       #;
-                       (fmt #f (with-width wrap
-                                           (columnar "+-" (fill #\-) "-+-"
-                                                     (fill #\-) "-+-"
-                                                     (fill #\-) "-+")))
-                       (map
-                        (match-lambda (('tr . tds)
-                                  (fmt #f
-                                       (with-width
-                                        wrap
-                                        (apply columnar
-                                               `("| "
-                                                 ;; write as loop?
-                                                 ,@(intersperse (filter-map
-                                                                 (match-lambda
-                                                                      (('td . body)
-                                                                       ;; FIXME: only allow inline elts
-                                                                       (wrap-lines (flatten-frags
-                                                                                    (pre-post-order body ss))))
-                                                                      (else #f))
-                                                                 tds)
-                                                                " | ")
-                                                 " |")))))
-                                 (else ""))
-                        elts)
-                       ;hr-glyph
-                       #\newline)))
+                      (let* ((rows (extract-table-items elts ss))
+                             (ncol (reduce max 0 (map length rows)))
+                             (sep (fmt #f (with-width
+                                           wrap
+                                           (apply columnar
+                                                  `("+-"
+                                                    ,@(intersperse
+                                                       (make-list ncol (fill #\-))
+                                                       "-+-")
+                                                    "-+"))))))
+                        (list
+                         #\newline
+                         ;;sep
+                         (map (lambda (row)
+                                ;; first pad row to uniform length
+                                (let* ((len (length row))
+                                       (row (if (> ncol len)
+                                                ;; 'til we fix wrap-lines bug, we need
+                                                ;; to use a non-whitespace char here
+                                                (append row (make-list (- ncol len) ""))
+                                                row)))
+                                  (list
+                                   sep
+                                   (fmt #f (with-width
+                                            wrap
+                                            (apply columnar
+                                                   `("| "
+                                                     ,@(intersperse
+                                                        (map wrap-lines row) " | ")
+                                                     " |")))))))
+                              rows)
+                         sep))))
 
             (tags . ,drop-tag)
             (toc . ,drop-tag)
