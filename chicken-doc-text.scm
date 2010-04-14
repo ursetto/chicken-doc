@@ -61,20 +61,21 @@
                       (loop (cdr dl) L term '())))    ; skip until first dt
                  (('dd . def)
                   (loop (cdr dl) L dt (cons def dd)))))))
-  (define (extract-table-items table ss)  ;; returns ( (td td ...) (td td ...) )
-                                          ;; with TD flattened into strings and wrapped
+  (define (extract-table-items table cell-ss)
+    ;; returns ( (td td ...) (td td ...) )
+    ;; with TD flattened into strings and wrapped
     (filter-map (match-lambda (('tr . tds)
                           (filter-map
                            (match-lambda (('td . body)
-                                     (flatten-frags (pre-post-order body ss)))
+                                     (flatten-frags (pre-post-order body cell-ss)))
                                     ;; we don't pass the "th" identity back, so we can't
                                     ;; do further processing, such as centering
                                     (('th . body)
                                      (string-upcase
-                                      (flatten-frags (pre-post-order body ss))))
+                                      (flatten-frags (pre-post-order body cell-ss))))
                                     (else #f))
                            tds))
-                         (else #f))
+                         (else #f))  ; usu. whitespace and (@ ...)
                 table))
   ;; special formatter for table top/bottom
   (define (fill char) (lambda (st) ((cat (make-string (fmt-width st) char)) st)))
@@ -85,7 +86,23 @@
          (drop-tag (lambda x '()))
          (hr-glyph (if wrap (make-string wrap #\-) "--------")))
     (letrec
-        ((ss 
+        ((default-elts
+          `((*text* . ,(lambda (tag text) text))
+            (*default* . ,(lambda (tag . body) (warning "dropped" tag) '()))))
+         (inline-elts
+          `((b . ,(lambda (tag . body) `("_" ,body "_")))
+            (i . ,(lambda (tag . body) `("/" ,body "/")))
+            (tt . ,(lambda (tag . body) `("`" ,body "`")))
+
+            (link . ,(lambda (tag href #!optional (desc #f))
+                       (if desc
+                           `(,desc #\space #\( ,href #\))
+                           href)))
+            (int-link . ,(lambda (tag href #!optional (desc #f))
+                           (or desc
+                               href ;; `(#\[ ,href #\])
+                               )))))
+         (block-elts
           `((section . ,(lambda (tag level name . body)
                           `(#\newline
                             ,(case level
@@ -110,6 +127,8 @@
                                         (indent-and-wrap-with-bullet
                                          i wrap p
                                          (parameterize ((list-indent (+ i (string-length p))))
+                                           ;; NB the transformer won't correctly handle
+                                           ;; block elements other than nested lists
                                            (pre-post-order items ss)))))))))))))
                 `((ul *preorder* .
                       ,(lambda (tag . items)
@@ -125,12 +144,12 @@
                      ,(map (match-lambda
                             ((term . defs)
                              (let ((prefix (string-append
-                                            "- " (flatten-frags (pre-post-order term ss))
+                                            "- " (flatten-frags (pre-post-order term inline-ss))
                                             ": ")))
                                        (indent-and-wrap-with-bullet
                                         (list-indent) wrap prefix
                                         ; FIXME: multiple defs should be displayed separately
-                                        (pre-post-order defs ss)))))
+                                        (pre-post-order defs inline-ss)))))
                            (extract-dl-items items)))))
             
             (dl ((dt . ,(lambda (tag . body)
@@ -174,14 +193,15 @@
                 ,(lambda (tag)
                    `(#\newline ,hr-glyph #\newline)))
 
-;; (fmt #f (columnar "| " (wrap-lines col1) " | " (wrap-lines col2)
-;;                   " | " (wrap-lines col3) " |"))
-
+            ;; (fmt #f (columnar "| " (wrap-lines col1) " | " (wrap-lines col2)
+            ;;                   " | " (wrap-lines col3) " |"))
             
             (table *preorder* .
                    ,(lambda (tag . elts)
-                      ;; FIXME: assumes wrap!
-                      (let* ((rows (extract-table-items elts ss))
+                      ;; Using columnar essentially requires that wrapping is enabled,
+                      ;; so if not, set it to 76 just for tables. *FIXME*
+                      (let* ((wrap (if (or (not wrap) (zero? wrap)) 76 wrap))
+                             (rows (extract-table-items elts inline-ss))
                              (ncol (reduce max 0 (map length rows)))
                              (sep (fmt #f (with-width
                                            wrap
@@ -195,11 +215,9 @@
                          #\newline
                          ;;sep
                          (map (lambda (row)
-                                ;; first pad row to uniform length
+                                ;; first pad row to uniform number of columns
                                 (let* ((len (length row))
                                        (row (if (> ncol len)
-                                                ;; 'til we fix wrap-lines bug, we need
-                                                ;; to use a non-whitespace char here
                                                 (append row (make-list (- ncol len) ""))
                                                 row)))
                                   (list
@@ -215,26 +233,14 @@
                          sep))))
 
             (tags . ,drop-tag)
-            (toc . ,drop-tag)
-            
-;;; inline elts
-            (b . ,(lambda (tag . body) `("_" ,body "_")))
-            (i . ,(lambda (tag . body) `("/" ,body "/")))
-            (tt . ,(lambda (tag . body) `("`" ,body "`")))
+            (toc . ,drop-tag)))
 
-            (link . ,(lambda (tag href #!optional (desc #f))
-                       (if desc
-                           `(,desc #\space #\( ,href #\))
-                           href)))
-            (int-link . ,(lambda (tag href #!optional (desc #f))
-                           (or desc
-                               href ;; `(#\[ ,href #\])
-                               )))
-;;; defaults
-            
-            (*text* . ,(lambda (tag text) text))
-            (*default* . ,(lambda (tag . body) (warning "dropped" tag) '()))
-            )))
+         (ss `(,@block-elts
+               ,@inline-elts
+               ,@default-elts))
+         (inline-ss `(,@inline-elts
+                      ,@default-elts)))
+
       ss)))
 
 (define (write-sxml-as-text doc wrap-col)
