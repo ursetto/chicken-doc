@@ -33,17 +33,9 @@
            ;; split required to extract indented lists in items ("rest") -- rethink this?
            (split-first-line (flatten-frags items))
            ((line1 . rest)
-            ;; Explicit with-width works around a bug(?) where the
-            ;; second column does not expand to fill the available
-            ;; width.
-            (if (string=? "" line1)
-                `(,prefix ,items #\newline)   ; avoid fmt BUG: error on (wrap-lines "")
-                (let ((plen (string-length prefix)))
-                  `(,(fmt #f (columnar plen (dsp prefix)
-                                       (with-width
-                                        (- wrap plen)
-                                        (wrap-lines line1))))
-                    ,rest))))))))
+            `(,(fmt #f (columnar (string-length prefix) (dsp prefix)
+                                 (wrap-lines line1)))
+              ,rest))))))
   (define (extract-dl-items dl)  ; returns ( (term . defs) ...)
     (let loop ((dl dl)
                (L '())
@@ -163,9 +155,7 @@
                     (let ((str (flatten-frags body)))  ; FIXME remove if no wrap
                       `(#\newline
                         ,(if wrap
-                             (if (string=? str "")
-                                 '() ; work around for bug in (wrap-lines "")
-                                 (fmt #f (with-width wrap (wrap-lines str))))
+                             (fmt #f (with-width wrap (wrap-lines str)))
                              (list str #\newline)))))) ; need extra NL if no wrap-lines
             (pre . ,(lambda (tag . body)
                       `(#\newline "    "  ; dumb
