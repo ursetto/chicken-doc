@@ -56,26 +56,28 @@
   (define (extract-table-items table cell-ss)
     ;; returns ( (td td ...) (td td ...) )
     ;; with TD flattened into strings and wrapped
-    (filter-map (match-lambda (('tr . tds)
-                          (filter-map
-                           (match-lambda (('td . body)
-                                     (flatten-frags (pre-post-order body cell-ss)))
-                                    ;; we don't pass the "th" identity back, so we can't
-                                    ;; do further processing, such as centering
-                                    (('th . body)
-                                     (string-upcase
-                                      (flatten-frags (pre-post-order body cell-ss))))
-                                    (else #f))
-                           tds))
-                         (else #f))  ; usu. whitespace and (@ ...)
-                table))
+    (let ((cell-ss `((@ . ,drop-tag)
+                     . ,cell-ss)))
+      (filter-map (match-lambda (('tr . tds)
+                            (filter-map
+                             (match-lambda (('td . body)
+                                       (flatten-frags (pre-post-order body cell-ss)))
+                                      ;; we don't pass the "th" identity back, so we can't
+                                      ;; do further processing, such as centering
+                                      (('th . body)
+                                       (string-upcase
+                                        (flatten-frags (pre-post-order body cell-ss))))
+                                      (else #f))
+                             tds))
+                           (else #f))   ; usu. whitespace and (@ ...)
+                  table)))
   ;; special formatter for table top/bottom
   (define (fill char) (lambda (st) ((cat (make-string (fmt-width st) char)) st)))
   ;(define (fill char) (lambda (st) ((pad-char char (pad/both (fmt-width st))) st)))
+  (define (drop-tag . x) '())
                            
   (let* ((wrap (and wrap (not (zero? wrap)) (max wrap 0)))
          (list-indent (make-parameter 2))
-         (drop-tag (lambda x '()))
          (hr-glyph (if wrap (make-string wrap #\-) "--------")))
     (letrec
         ((default-elts
