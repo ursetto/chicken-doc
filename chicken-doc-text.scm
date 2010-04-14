@@ -198,7 +198,7 @@
                              (sep (fmt #f (with-width
                                            wrap
                                            (apply columnar
-                                                  `("+-"
+                                                  `(" +-"
                                                     ,@(intersperse
                                                        (make-list ncol (fill #\-))
                                                        "-+-")
@@ -217,7 +217,7 @@
                                    (fmt #f (with-width
                                             wrap
                                             (apply columnar
-                                                   `("| "
+                                                   `(" | "
                                                      ,@(intersperse
                                                         (map wrap-lines row) " | ")
                                                      " |")))))))
