@@ -8,7 +8,6 @@
 
 (module chicken-doc
 ;; Used by chicken-doc command
-
 (verify-repository
  repository-base
  describe-signatures
@@ -261,7 +260,7 @@
 
 ;; Returns list of nodes matching identifier ID.
 ;; ID may be a symbol or string.
-(define (match-nodes id)
+(define (match-nodes/id id)
   (define (lookup id)
     (hash-table-ref/default (id-cache) id '()))
   (validate-id-cache!)
@@ -270,11 +269,25 @@
            (lookup-node (append x (list id))))
          (lookup id))))
 
-;; (define (search id)
-;;   (for-each (lambda (x)
-;;               (print ;; (string-intersperse x "#")
-;;                x))
-;;             (lookup id)))
+;; Returns list of nodes whose identifiers
+;; match regex RE.
+(define (match-nodes/re re)
+  (let ((rx (irregex re)))
+    (validate-id-cache!)
+    (let ((keys (sort (map symbol->string (hash-table-keys (id-cache)))
+                      string<?)))
+      (append-map (lambda (id)
+                    (match-nodes id))
+                  (filter-map (lambda (k)
+                                (and (string-search rx k) k))
+                              keys)))))
+
+;; Return list of nodes whose identifiers match
+;; symbol, string or re.
+(define (match-nodes idre)
+  (if (or (irregex? idre) (regexp? idre))
+      (match-nodes/re idre)
+      (match-nodes/id idre)))
 
 (define (search-and-describe id)
   (let ((nodes (match-nodes id)))

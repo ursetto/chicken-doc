@@ -2,6 +2,7 @@
 (import chicken-doc)
 (require-library posix)
 (import (only posix with-output-to-pipe setenv))
+(use regex) (import irregex)
 
 ;;; Usage
 
@@ -10,14 +11,18 @@
     (lambda ()
       (print "usage: " (program-name) " -s|-c|-i path")
       (print "       " (program-name) " -f id")
+      (print "       " (program-name) " -m re")
       (print "       " (program-name) " id | path")
-      (print "  -s path        Show signature")
-      (print "  -c path        Show table of contents (child IDs)")
-      (print "  -i path        Show documentation")
-      (print "  -f id          Show all matching paths for ID")
-      (print "where ID is a single identifier and PATH is zero or")
-      (print "more IDs comprising a path from the documentation root,")
-      (print "separated by spaces or the # character.")
+      (print "   -s path        Show signature")
+      (print "   -c path        Show table of contents (child IDs)")
+      (print "   -i path        Show documentation")
+      (print "   -f id          Show all matching paths for ID")
+      (print " where ID is a single identifier and PATH is zero or")
+      (print " more IDs comprising a path from the documentation root,")
+      (print " separated by spaces or the # character.")
+      (print)
+      (print "   -m re          Show all matching paths for RE")
+      (print " where RE is a POSIX regular expression.  Similar to -f.")
       (print)
       (print "When no option is given, guess the user's intent.  With")
       (print "a single ID, find the ID (as with -f) and show its")
@@ -32,6 +37,8 @@
       (print "  -i 9p#open/rdonly        # Show documentation for same")
       (print "  -c posix                 # Show TOC for Unit posix")
       (print "  -c                       # Show toplevel TOC")
+      (print "  -m call-                 # Show identifiers containing call-")
+      (print "  -m -file$                # Show identifiers ending in -file")
       (print "  use                      # Show doc for \"use\" in chicken core")
       (print "  posix                    # Show doc for Unit posix")
       (print "  open/rdonly              # Show matches for open/rdonly")
@@ -119,6 +126,10 @@
             ;; Is this useful?  Identifier search ("find") on signatures, showing path.
             ;; I wonder if we need the signature, or just the path.
             (search-only (cadr (command-line-arguments))))
+           ((string=? o "-m")
+            ;; Not doing search-and-describe because when there are zero
+            ;; matches, that will throw an error
+            (search-only (irregex (cadr (command-line-arguments)))))
            ((string=? o "-c")
             (describe-contents (lookup (cdr (command-line-arguments)))))
            ((string=? o "-i")
