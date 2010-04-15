@@ -73,10 +73,14 @@
 ;;; Wrapping
 
 (define (determine-wrap-column)
+  (define (safe-terminal-size p)
+    (handle-exceptions e 0
+      (terminal-size p)))
   (cond ((get-environment-variable "CHICKEN_DOC_WRAP")
          => string->number)
         (else
-         (let-values (((rows cols) (terminal-size (current-input-port))))
+         (let-values (((rows cols) (safe-terminal-size
+                                    (current-input-port))))
            (if (= cols 0)
                76       ; (* 80 0.95)
                (inexact->exact (truncate (* cols 0.95))))))))
