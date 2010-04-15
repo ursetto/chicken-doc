@@ -348,17 +348,23 @@
              (describe-contents (lookup-node p)))
             (else
              (search-and-describe-contents p))))))
+(define repl-wtf
+  (lambda (re)
+    (search-only (irregex re))))
 
 (when (feature? 'csi)
   ;; Warning -- will execute if called from a script.
   ;; We really only want this to execute at the REPL.
   (set-chicken-doc-repository! (repository-base) ;; (locate-repository)
                           )
-  (toplevel-command 'doc (lambda () (repl-doc-dwim (read)))
-                    ",doc PATHSPEC     Describe identifier or path with chicken-doc")
+  (toplevel-command 'wtf (lambda () (repl-wtf (string-trim-both
+                                          (read-line))))
+                    ",wtf RE           Regex search with chicken-doc (\"where to find\")")
   (toplevel-command 'toc (lambda () (repl-toc-dwim (read)))
                     ;; TOC should look up if this is a relative path
-                    ",toc PATHSPEC     List contents of path"))
+                    ",toc PATHSPEC     List contents of path with chicken-doc")
+  (toplevel-command 'doc (lambda () (repl-doc-dwim (read)))
+                    ",doc PATHSPEC     Describe identifier or path with chicken-doc"))
 
 
 )  ;; end module
