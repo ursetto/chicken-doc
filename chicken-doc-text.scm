@@ -33,8 +33,10 @@
            ;; split required to extract indented lists in items ("rest") -- rethink this?
            (split-first-line (flatten-frags items))
            ((line1 . rest)
-            `(,(fmt #f (columnar (string-length prefix) (dsp prefix)
-                                 (wrap-lines line1)))
+            `(,(fmt #f (with-width
+                        wrap
+                        (columnar (string-length prefix) (dsp prefix)
+                                  (wrap-lines line1))))
               ,rest))))))
   (define (extract-dl-items dl)  ; returns ( (term . defs) ...)
     (let loop ((dl dl)
