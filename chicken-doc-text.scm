@@ -224,6 +224,14 @@
                               rows)
                          sep))))
 
+            (blockquote
+             . ,(lambda (tag . body)
+                  (let ((str (flatten-frags body)))
+                    `(#\newline
+                      ,(if wrap
+                           (fmt #f (with-width wrap (columnar "  > " (wrap-lines str))))
+                           (list "  > " str #\newline))))))
+
             ;; (examples (example (expr ...) (result ...)) ...) => (pre ...)
             ;; Some extraneous NLs are deleted, not all; newline output is crappy
             ;; (init ...) clause ignored
