@@ -5,6 +5,6 @@
  (license "BSD")
  (doc-from-wiki)
  (needs matchable                 ; main
-        (fmt 0.702) sxml-transforms ; chicken-doc-text
+        (fmt 0.703) sxml-transforms ; chicken-doc-text
         )
  (files "chicken-doc.scm" "chicken-doc-cmd.scm" "chicken-doc.setup" "chicken-doc.html"))
