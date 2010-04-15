@@ -224,6 +224,32 @@
                               rows)
                          sep))))
 
+            ;; (examples (example (expr ...) (result ...)) ...) => (pre ...)
+            ;; Some extraneous NLs are deleted, not all; newline output is crappy
+            ;; (init ...) clause ignored
+            (examples *preorder*
+                      . ,(lambda (tag . body)
+                           (pre-post-order
+                            body
+                            `((example *preorder*
+                                       . ,(lambda (tag . body)
+                                            (pre-post-order
+                                             `(pre .
+                                                   ,(pre-post-order
+                                                     body
+                                                     `((init *preorder*
+                                                             . ,(lambda (tag . body)
+                                                                  `(,body #\newline)))
+                                                       (expr *preorder*
+                                                             . ,(lambda (tag . body)
+                                                                  body))
+                                                       (result *preorder*
+                                                               . ,(lambda (tag . body)
+                                                                    `("\n; Result: " ,body)))
+                                                       (*default* . ,drop-tag))))
+                                             ss)))
+                              (*default* . ,drop-tag)))))
+            
             (tags . ,drop-tag)
             (toc . ,drop-tag)))
 
