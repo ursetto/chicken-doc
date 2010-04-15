@@ -9,20 +9,20 @@
   (with-output-to-port (current-error-port)
     (lambda ()
       (print "usage: " (program-name) " -s|-c|-i path")
-      (print "       " (program-name) " -f key")
-      (print "       " (program-name) " key | path")
+      (print "       " (program-name) " -f id")
+      (print "       " (program-name) " id | path")
       (print "  -s path        Show signature")
-      (print "  -c path        Show table of contents (child keys)")
+      (print "  -c path        Show table of contents (child IDs)")
       (print "  -i path        Show documentation")
-      (print "  -f key         Show all matching paths for key")
-      (print "where KEY is a single identifier and PATH is zero or")
-      (print "more keys comprising a path from the documentation root,")
+      (print "  -f id          Show all matching paths for ID")
+      (print "where ID is a single identifier and PATH is zero or")
+      (print "more IDs comprising a path from the documentation root,")
       (print "separated by spaces or the # character.")
       (print)
       (print "When no option is given, guess the user's intent.  With")
-      (print "a single key, find the key (as with -f) and show its")
+      (print "a single ID, find the ID (as with -f) and show its")
       (print "documentation (as with -i) or show all matching paths")
-      (print "if multiple matches exist.  If more than one key is")
+      (print "if multiple matches exist.  If more than one ID is")
       (print "provided, show documentation on the path (as with -i).")
       (print)
       (print "Examples:")
@@ -70,6 +70,30 @@
                  (close-output-pipe pipe)
                  rv))))))
 
+;;; Wrapping
+
+(define (determine-wrap-column)
+  (cond ((get-environment-variable "CHICKEN_DOC_WRAP")
+         => string->number)
+        (else
+         (let-values (((rows cols) (terminal-size (current-input-port))))
+           (if (= cols 0)
+               76       ; (* 80 0.95)
+               (inexact->exact (truncate (* cols 0.95))))))))
+
+;;; Helpers
+
+;; Special lookup for command-line.  Treat args as a standard path list
+;; -but- if only one argument is provided, try to decompose it as a
+;; qualified path string.
+(define (lookup args)
+  (define (normalize-path p)
+    (cond ((null? p) p)
+          ((null? (cdr p))
+           (decompose-qualified-path (car p)))
+          (else p)))
+  (lookup-node (normalize-path args)))
+
 ;;; Main
 
 (when (null? (command-line-arguments))
@@ -80,22 +104,24 @@
            (repository-base))
   (exit 1))
 
+(wrap-column (determine-wrap-column))
+
 (with-output-to-pager
  (lambda ()
    (let ((o (car (command-line-arguments))))
      (cond ((string=? o "-s")
-            (describe-signatures (list (map string->symbol
-                                            (cdr (command-line-arguments))))))
+            (describe-signatures (list (lookup (cdr (command-line-arguments))))))
            ((string=? o "-f")
-            ;; Is this useful?  Basically, identifier search on signatures, showing path
-            ;; I wonder if we need the signature, or just the path
-            (search-only (string->symbol (cadr (command-line-arguments)))))
+            ;; Is this useful?  Identifier search ("find") on signatures, showing path.
+            ;; I wonder if we need the signature, or just the path.
+            (search-only (cadr (command-line-arguments))))
            ((string=? o "-c")
-            (describe-contents (map string->symbol (cdr (command-line-arguments)))))
+            (describe-contents (lookup (cdr (command-line-arguments)))))
            ((string=? o "-i")
-            (describe (map string->symbol (cdr (command-line-arguments)))))
+            ;; FIXME: decompose-pathspec required here but won't work yet.
+            (describe (lookup (cdr (command-line-arguments)))))
            (else
-            (let ((ids (map string->symbol (command-line-arguments))))
+            (let ((ids (command-line-arguments)))
               (if (null? (cdr ids))
                   (doc-dwim (car ids))
-                  (doc-dwim ids)))))) ))
+                  (doc-dwim ids))))))))
