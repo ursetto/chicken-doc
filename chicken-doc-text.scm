@@ -5,7 +5,8 @@
 (use sxml-transforms)
 (use matchable)
 (use data-structures srfi-13 ports)
-(use (only srfi-1 filter-map reduce make-list))
+(require-library srfi-1)
+(import (only srfi-1 filter-map reduce make-list))
 
 (define +identifier-tags+
   (map string->symbol
