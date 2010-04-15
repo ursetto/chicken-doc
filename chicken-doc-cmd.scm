@@ -74,7 +74,7 @@
 
 (define (determine-wrap-column)
   (define (safe-terminal-size p)
-    (handle-exceptions e 0
+    (handle-exceptions e (values 0 0)
       (terminal-size p)))
   (cond ((get-environment-variable "CHICKEN_DOC_WRAP")
          => string->number)
