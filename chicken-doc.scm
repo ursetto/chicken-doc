@@ -22,8 +22,13 @@
  path->keys keys->pathname field-filename keys+field->pathname
 ;; Node API
  lookup-node
+ match-nodes
  node-signature
  node-type
+ node-sxml
+ node-path
+ node-children
+ node-child-ids         ; experimental
 ;; Other API
  decompose-qualified-path
 ;; Parameters
@@ -117,17 +122,25 @@
 ;; Return string list of child keys (directories) directly under PATH, or #f
 ;; if the PATH is invalid.
 
+(define (path-child-keys path)
+  (let* ((keys (path->keys path))
+         (dir (keys->pathname keys)))
+    (and (directory? dir)
+         (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
+                 (directory dir)))))
+
 (define (node-children node)
-  (define (path-child-keys path)
-    (let* ((keys (path->keys path))
-           (dir (keys->pathname keys)))
-      (and (directory? dir)
-           (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
-                   (directory dir)))))
   (let ((path (node-path node)))
     (map (lambda (k)
            (lookup-node (append path (list (key->id k)))))
          (path-child-keys path))))
+
+;; Shouldn't be necessary -- normally you should use node-children --
+;; but currently a node lookup populates the node with metadata,
+;; which wastes some time if you only need ids.  Ideally metadata
+;; would be loaded lazily or lookup speed would be faster.
+(define (node-child-ids node)
+  (map key->id (path-child-keys (node-path node))))
 
 ;; Obtain metadata alist at PATH.  Valid node without metadata record
 ;; returns '().  Invalid node throws error.
@@ -157,7 +170,17 @@
   (let ((id (if (null? path)
                 ""   ; TOC
                 (last path))))
-    (make-node path id (read-path-metadata path))))
+    (make-node path id
+#;
+               (let* ((keys (path->keys path))
+                     (pathname (keys->pathname keys)))
+                 (cond ((directory? pathname)
+                        #f)
+                       (else
+                        (error "no such node" path))))
+
+
+                 (read-path-metadata path))))
 
 ;; Return string representing signature of PATH.  If no signature, return "".
 (define (node-signature node)
