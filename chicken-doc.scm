@@ -15,7 +15,9 @@
 ;; Used additionally by chicken-doc-admin.  Somewhat internal, but exported.
  repository-information repository-root
  repository-magic +repository-version+
- path->keys keys->pathname field-filename keys+field->pathname
+ repository-id-cache set-repository-id-cache!
+ path->keys keys->pathname field-filename keys+field->pathname key->id
+ make-id-cache id-cache-filename
 ;; Node API
  lookup-node
  match-nodes
