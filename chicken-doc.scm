@@ -3,7 +3,9 @@
 (include "chicken-doc-text.scm") ; local module
 
 (module chicken-doc
+*
 ;; Used by chicken-doc command
+#;
 (verify-repository
  open-repository close-repository locate-repository current-repository
  repository-base
@@ -315,6 +317,25 @@
                   (filter-map (lambda (k)
                                 (and (string-search rx k) k))
                               keys)))))
+
+;;(define ids (sort (flatten (hash-table-fold t (lambda (k v s) (cons (map (lambda (x) (string-intersperse (map ->string (append x (list k))) " ")) v) s)) '())) string<?))
+;;(let ((rx (irregex "o.O"))) (filter-map (lambda (k) (and (string-search rx k) k)) ids))
+
+
+
+;; ,t (validate-id-cache!)
+;;    0.123 seconds elapsed
+;;    0.024 seconds in (major) GC
+;;    47942 mutations
+;;        3 minor GCs
+;;        5 major GCs
+;; after id cache loaded, disk cache warm
+;; ,t (match-nodes (irregex "posix"))
+;;    0.065 seconds elapsed                (0.06 - 0.10 sec)
+;;        0 seconds in (major) GC
+;;    68054 mutations
+;;      832 minor GCs
+;;        0 major GCs
 
 ;; Return list of nodes whose identifiers match
 ;; symbol, string or re.
