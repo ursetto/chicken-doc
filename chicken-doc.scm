@@ -21,6 +21,7 @@
 ;; Node API
  lookup-node
  match-nodes
+ match-node-paths/re
  node-signature
  node-type
  node-sxml
@@ -99,11 +100,15 @@
 ;;; Access
 
 (define-record-type chicken-doc-node
-  (make-node path id md)
+  (%make-node path id md)
   node?
   (path node-path)            ; includes ID
   (id node-id)
   (md node-md))
+
+(define (make-node path id)
+  (%make-node path id
+              (delay (read-path-metadata path))))
 
 ;; Return string list of child keys (directories) directly under PATH, or #f
 ;; if the PATH is invalid.
@@ -148,7 +153,8 @@
          => cadr)
         (else #f)))
 
-(define node-metadata node-md)    ; Alternatively, load metadata as needed.
+(define (node-metadata node)
+  (force (node-md node)))         ;  load metadata as needed
 
 ;; Return node record at PATH or throw error if the record does
 ;; not exist (implicitly in read-path-metadata).
@@ -156,17 +162,20 @@
   (let ((id (if (null? path)
                 ""   ; TOC
                 (last path))))
-    (make-node path id
-#;
-               (let* ((keys (path->keys path))
-                     (pathname (keys->pathname keys)))
-                 (cond ((directory? pathname)
-                        #f)
-                       (else
-                        (error "no such node" path))))
-
-
-                 (read-path-metadata path))))
+    ;; Note that, if metadata is delayed, our API requires that
+    ;; the node be checked for existence here.  If instead nodes
+    ;; were not required to exist, and a manual existence check
+    ;; were possible, we could avoid the directory touch when
+    ;; merely matching against nodes.
+    (let* ((keys (path->keys path))   ; FIXME!! path->keys is noticeably slow [*]
+           (pathname (keys->pathname keys)))
+      (or (directory? pathname)
+          (error "no such node" path)))          ; now required
+    (make-node path id)))
+; [*] ,t (let loop ((n 100000)) (if (= n 0) 'done (begin (path->keys '(abc def ghi)) (loop (- n 1)))))  -> 1.66 seconds elapsed, 17 major GCs, 1.2M mutations
+; [*] ,t (let loop ((n 100000)) (if (= n 0) 'done (begin (path->keys '(abc d.f ghi)) (loop (- n 1)))))  -> 2.76 seconds, 40 GCs, 1.6M mutations
+; [*] ,t (let loop ((n 100000)) (if (= n 0) 'done (begin (path->keys '("abc" "def" "ghi")) (loop (- n 1))))) -> 0.876 seconds, 6 major GCs, 1.2M mutations
+;; uri-encode-string takes 5x as long as id->key, skip it
 
 ;; Return string representing signature of PATH.  If no signature, return "".
 (define (node-signature node)
@@ -244,11 +253,36 @@
 ;; Cache is unique to repository but is shared between
 ;; threads holding the same repository object.
 (define-record-type id-cache
-  (make-id-cache table mtime filename)
+  (%make-id-cache table mtime filename
+                  ids ; id string list
+                  paths ; path string list
+                  )
   id-cache?
   (table id-cache-table)
   (mtime id-cache-mtime)
-  (filename id-cache-filename))
+  (filename id-cache-filename)
+  (ids %id-cache-ids)
+  (paths %id-cache-paths))
+
+;; Delayed construction of id string list and paths is legal
+;; because cache updates are disallowed.
+(define (make-id-cache table mtime filename)
+  (%make-id-cache table mtime filename
+                  (delay (sort (map symbol->string (hash-table-keys table))
+                               string<?))
+                  (delay (sort
+                          (flatten
+                           (hash-table-fold
+                            table
+                            (lambda (k v s)
+                              (cons
+                               (map (lambda (x)
+                                      (string-intersperse
+                                       (map ->string (append x (list k))) " "))
+                                    v)
+                               s))
+                            '()))
+                          string<?))))
 
 (define (make-invalid-id-cache repo-base)
   (make-id-cache #f 0
@@ -288,6 +322,14 @@
 ;; (define (invalidate-id-cache!)
 ;;   (set-repository-id-cache! (current-repository) (make-invalid-id-cache)))
 
+;; Return a list of sorted IDs as strings, suitable for regex node matching.
+;; Construction is lazy because it is not that cheap.
+(define (id-cache-ids c)
+  (force (%id-cache-ids c)))
+;; This one's pretty expensive (time and space wise).
+(define (id-cache-paths c)
+  (force (%id-cache-paths c)))
+
 ;;; ID search
 
 ;; Returns list of nodes matching identifier ID.
@@ -304,17 +346,58 @@
 ;; Returns list of nodes whose identifiers
 ;; match regex RE.
 (define (match-nodes/re re)
-  (define (cache-keys)
-    (id-cache-keys (current-id-cache)))
   (let ((rx (irregex re)))
     (validate-id-cache!)
-    (let ((keys (sort (map symbol->string (cache-keys))
-                      string<?)))
-      (append-map (lambda (id)
-                    (match-nodes id))
-                  (filter-map (lambda (k)
-                                (and (string-search rx k) k))
-                              keys)))))
+    (append-map (lambda (id)
+                  (match-nodes id))
+                (filter-map (lambda (k)
+                              (and (string-search rx k) k))
+                            (id-cache-ids (current-id-cache))))))
+
+;; Match against full node paths with RE.
+(define (match-node-paths/re re)
+  (let ((rx (irregex re)))
+    (validate-id-cache!)
+    (map (lambda (path)
+           (lookup-node (string-split path))) ; stupid resplit
+         (filter-map (lambda (k)
+                       (and (string-search rx k) k))
+                     (id-cache-paths (current-id-cache))))))
+
+;; ,t (validate-id-cache!)
+;;    0.123 seconds elapsed
+;;    0.024 seconds in (major) GC
+;;    47942 mutations
+;;        3 minor GCs
+;;        5 major GCs
+;; after id cache loaded, disk cache warm
+;; ,t (match-nodes (irregex "posix"))
+;;    0.065 seconds elapsed                (0.06 - 0.10 sec)
+;;        0 seconds in (major) GC
+;;    68054 mutations
+;;      832 minor GCs
+;;        0 major GCs
+;; after id-cache-ids cache
+;; ,t (match-nodes (irregex "posix"))
+;;    0.036 seconds elapsed
+;;        0 seconds in (major) GC
+;;     9642 mutations
+;;       83 minor GCs
+;;        0 major GCs
+;; ,t (match-nodes (irregex "."))
+;;    1.978 seconds elapsed           ; actually about 10-15 seconds on disk
+;;    0.057 seconds in (major) GC
+;;   147205 mutations
+;;      404 minor GCs
+;;        4 major GCs
+;; time chicken-doc -m . >/dev/null    ; presuming totally warm disk cache
+;; real    0m0.960s
+;; ,t (match-nodes (irregex "."))
+;;    0.321 seconds                    ; if metadata read is delayed, but dir checked
+;;    0.133 seconds                    ; if metadata read delayed and dir not checked
+;;    0.250 seconds                    ; if metadata read delayed and dir not checked, but path->pathname still computed
+
+
 
 ;; Return list of nodes whose identifiers match
 ;; symbol, string or re.
