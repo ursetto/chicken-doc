@@ -256,19 +256,34 @@
 (define-record-type id-cache
   (%make-id-cache table mtime filename
                   ids ; id string list
+                  paths ; path string list
                   )
   id-cache?
   (table id-cache-table)
   (mtime id-cache-mtime)
   (filename id-cache-filename)
-  (ids %id-cache-ids))
+  (ids %id-cache-ids)
+  (paths %id-cache-paths))
 
-;; Delayed construction of id string list (IDS) is legal
+;; Delayed construction of id string list and paths is legal
 ;; because cache updates are disallowed.
 (define (make-id-cache table mtime filename)
   (%make-id-cache table mtime filename
                   (delay (sort (map symbol->string (hash-table-keys table))
-                               string<?))))
+                               string<?))
+                  (delay (sort
+                          (flatten
+                           (hash-table-fold
+                            table
+                            (lambda (k v s)
+                              (cons
+                               (map (lambda (x)
+                                      (string-intersperse
+                                       (map ->string (append x (list k))) " "))
+                                    v)
+                               s))
+                            '()))
+                          string<?))))
 
 (define (make-invalid-id-cache repo-base)
   (make-id-cache #f 0
@@ -312,6 +327,9 @@
 ;; Construction is lazy because it is not that cheap.
 (define (id-cache-ids c)
   (force (%id-cache-ids c)))
+;; This one's pretty expensive (time and space wise).
+(define (id-cache-paths c)
+  (force (%id-cache-paths c)))
 
 ;;; ID search
 
@@ -337,10 +355,16 @@
                               (and (string-search rx k) k))
                             (id-cache-ids (current-id-cache))))))
 
-;;(define ids (sort (flatten (hash-table-fold t (lambda (k v s) (cons (map (lambda (x) (string-intersperse (map ->string (append x (list k))) " ")) v) s)) '())) string<?))
-;;(let ((rx (irregex "o.O"))) (filter-map (lambda (k) (and (string-search rx k) k)) ids))
-
-
+;; Match against full node paths with RE.
+(define (match-node-paths/re re)
+  (let ((rx (irregex re)))
+    (validate-id-cache!)
+    (print "match-node-paths/re")
+    (map (lambda (path)
+           (lookup-node (string-split path))) ; stupid
+         (filter-map (lambda (k)
+                       (and (string-search rx k) k))
+                     (id-cache-paths (current-id-cache))))))
 
 ;; ,t (validate-id-cache!)
 ;;    0.123 seconds elapsed
@@ -370,6 +394,11 @@
 ;;        4 major GCs
 ;; time chicken-doc -m . >/dev/null    ; presuming totally warm disk cache
 ;; real    0m0.960s
+;; ,t (match-nodes (irregex "."))
+;;    0.321 seconds                    ; if metadata read is delayed, but dir checked
+;;    0.133 seconds                    ; if metadata read delayed and dir not checked
+;;    0.250 seconds                    ; if metadata read delayed and dir not checked, but path->pathname still computed
+
 
 
 ;; Return list of nodes whose identifiers match
