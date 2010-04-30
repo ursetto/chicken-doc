@@ -101,11 +101,15 @@
 ;;; Access
 
 (define-record-type chicken-doc-node
-  (make-node path id md)
+  (%make-node path id md)
   node?
   (path node-path)            ; includes ID
   (id node-id)
   (md node-md))
+
+(define (make-node path id)
+  (%make-node path id
+              (delay (read-path-metadata path))))
 
 ;; Return string list of child keys (directories) directly under PATH, or #f
 ;; if the PATH is invalid.
@@ -150,7 +154,8 @@
          => cadr)
         (else #f)))
 
-(define node-metadata node-md)    ; Alternatively, load metadata as needed.
+(define (node-metadata node)
+  (force (node-md node)))         ;  load metadata as needed
 
 ;; Return node record at PATH or throw error if the record does
 ;; not exist (implicitly in read-path-metadata).
@@ -158,17 +163,20 @@
   (let ((id (if (null? path)
                 ""   ; TOC
                 (last path))))
-    (make-node path id
-#;
-               (let* ((keys (path->keys path))
-                     (pathname (keys->pathname keys)))
-                 (cond ((directory? pathname)
-                        #f)
-                       (else
-                        (error "no such node" path))))
-
-
-                 (read-path-metadata path))))
+    ;; Note that, if metadata is delayed, our API requires that
+    ;; the node be checked for existence here.  If instead nodes
+    ;; were not required to exist, and a manual existence check
+    ;; were possible, we could avoid the directory touch when
+    ;; merely matching against nodes.
+    (let* ((keys (path->keys path))   ; FIXME!! path->keys is noticeably slow [*]
+           (pathname (keys->pathname keys)))
+      (or (directory? pathname)
+          (error "no such node" path)))          ; now required
+    (make-node path id)))
+; [*] ,t (let loop ((n 100000)) (if (= n 0) 'done (begin (path->keys '(abc def ghi)) (loop (- n 1)))))  -> 1.66 seconds elapsed, 17 major GCs, 1.2M mutations
+; [*] ,t (let loop ((n 100000)) (if (= n 0) 'done (begin (path->keys '(abc d.f ghi)) (loop (- n 1)))))  -> 2.76 seconds, 40 GCs, 1.6M mutations
+; [*] ,t (let loop ((n 100000)) (if (= n 0) 'done (begin (path->keys '("abc" "def" "ghi")) (loop (- n 1))))) -> 0.876 seconds, 6 major GCs, 1.2M mutations
+;; uri-encode-string takes 5x as long as id->key, skip it
 
 ;; Return string representing signature of PATH.  If no signature, return "".
 (define (node-signature node)
