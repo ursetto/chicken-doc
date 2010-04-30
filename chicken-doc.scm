@@ -1,14 +1,11 @@
 ;;; chicken-doc
 
-;; FIXME: Quite a few things are exported for chicken-doc-admin's use only
-;; such as id->key.  Furthermore even certain regular things shouldn't
-;; be exported to the REPL.
-
 (include "chicken-doc-text.scm") ; local module
 
 (module chicken-doc
 ;; Used by chicken-doc command
 (verify-repository
+ open-repository close-repository locate-repository current-repository
  repository-base
  describe-signatures
  search-only
@@ -17,9 +14,10 @@
  doc-dwim
 ;; Used additionally by chicken-doc-admin.  Somewhat internal, but exported.
  repository-information repository-root
- repository-magic repository-version
- id-cache id-cache-filename id-cache-mtime id-cache-add-directory!
- path->keys keys->pathname field-filename keys+field->pathname
+ repository-magic +repository-version+
+ repository-id-cache set-repository-id-cache!
+ path->keys keys->pathname field-filename keys+field->pathname key->id
+ make-id-cache id-cache-filename
 ;; Node API
  lookup-node
  match-nodes
@@ -45,20 +43,8 @@
 
 (define wrap-column
   (make-parameter 76))   ; 0 or #f for no wrapping
-(define repository-base
-  (make-parameter #f))
-
-(define (locate-repository)
-  (or (getenv "CHICKEN_DOC_REPOSITORY")
-      (make-pathname (chicken-home) "chicken-doc")))
-
-;; Hmm--should we set this on module load?
-(repository-base (locate-repository))
 
 ;;; Lowlevel
-
-(define (repository-root)
-  (make-pathname (repository-base) "root"))
 
 (define +rx:%escape+ (irregex "[%/,.*<>?!: ]"))
 (define +rx:%unescape+ (irregex "%([0-9a-fA-F][0-9a-fA-F])"))
@@ -87,7 +73,7 @@
 (define (path->keys path)
   (map id->key path))
 (define (keys->pathname keys)
-  (make-pathname (cons (repository-root) keys) #f))
+  (make-pathname (cons (repository-root (current-repository)) keys) #f))
 (define (field-filename name)
   (string-append "," (->string name)))
 (define (pathname+field->pathname pathname field)
@@ -255,29 +241,52 @@
 
 ;;; ID search cache
 
-(define id-cache
-  (make-parameter #f))
-(define (id-cache-filename)
-  (make-pathname (repository-base) "id.idx"))
-(define id-cache-mtime
-  (make-parameter 0))
-(define (id-cache-add-directory! pathname)
-  (let ((id (key->id (pathname-file pathname)))
-        ;; We don't save the ID name in the value (since it is in the key)
-        (val (map key->id (butlast (string-split pathname "/\\")))))   ;; hmm
-    (hash-table-update!/default (id-cache) id (lambda (old) (cons val old)) '())))
-(define (read-id-cache!)
-  (id-cache
-   (call-with-input-file (id-cache-filename)
-     (lambda (in)
-       (id-cache-mtime (file-modification-time (port->fileno in)))
-       (alist->hash-table (read in) eq?)))))
+;; Cache is unique to repository but is shared between
+;; threads holding the same repository object.
+(define-record-type id-cache
+  (make-id-cache table mtime filename)
+  id-cache?
+  (table id-cache-table)
+  (mtime id-cache-mtime)
+  (filename id-cache-filename))
+
+(define (make-invalid-id-cache repo-base)
+  (make-id-cache #f 0
+                 (make-pathname repo-base "id.idx")))
+
+(define (current-id-cache)  ; access current id cache hash table; legacy
+  (repository-id-cache (current-repository)))
+(define (id-cache-ref c id)
+  (hash-table-ref/default (id-cache-table c) id '()))
+(define (id-cache-keys c)
+  (hash-table-keys (id-cache-table c)))
+
+;; Validate and update the shared id cache in the current repository.
 (define (validate-id-cache!)
-  (when (< (id-cache-mtime)
-           (file-modification-time (id-cache-filename)))
-    (read-id-cache!)))
-(define (invalidate-id-cache!)
-  (id-cache-mtime 0))
+  (define (read-id-cache! r c)
+    (define (read-id-cache c)
+      (let ((fn (id-cache-filename c)))
+        (call-with-input-file fn
+          (lambda (in)
+            (make-id-cache
+             (alist->hash-table (read in) eq?)
+             (file-modification-time (port->fileno in))
+             fn)))))
+    (set-repository-id-cache! r (read-id-cache c)))
+
+  ;; We don't currently lock id-cache validations with a mutex.
+  ;; All that (should) happen is that when the cache is (rarely)
+  ;; updated, if two threads validate at the same time both will
+  ;; read the entire cache in.
+  (let* ((r (current-repository))
+         (c (repository-id-cache r)))
+    (when (< (id-cache-mtime c)
+             (file-modification-time (id-cache-filename c)))
+      (read-id-cache! r c))))
+
+;; Not currently needed.  Also not tested and not thread-safe
+;; (define (invalidate-id-cache!)
+;;   (set-repository-id-cache! (current-repository) (make-invalid-id-cache)))
 
 ;;; ID search
 
@@ -285,7 +294,7 @@
 ;; ID may be a symbol or string.
 (define (match-nodes/id id)
   (define (lookup id)
-    (hash-table-ref/default (id-cache) id '()))
+    (id-cache-ref (current-id-cache) id))
   (validate-id-cache!)
   (let ((id (if (string? id) (string->symbol id) id)))
     (map (lambda (x)
@@ -295,9 +304,11 @@
 ;; Returns list of nodes whose identifiers
 ;; match regex RE.
 (define (match-nodes/re re)
+  (define (cache-keys)
+    (id-cache-keys (current-id-cache)))
   (let ((rx (irregex re)))
     (validate-id-cache!)
-    (let ((keys (sort (map symbol->string (hash-table-keys (id-cache)))
+    (let ((keys (sort (map symbol->string (cache-keys))
                       string<?)))
       (append-map (lambda (id)
                     (match-nodes id))
@@ -342,23 +353,58 @@
 
 ;;; Repository
 
-(define repository-version 2)
-(define repository-information (make-parameter '()))
-(define (repository-magic)
-  (make-pathname (repository-base) ".chicken-doc-repo"))
-(define (verify-repository)
-  (and (file-exists? (repository-magic))
-       (let ((repo-info (with-input-from-file (repository-magic) read)))
-         (repository-information repo-info)
-         (let ((version (or (alist-ref 'version repo-info) 0)))
-           (cond ((= version repository-version))
-                 (else (fprintf (current-error-port) "Invalid repo version number ~a\n" version)
-                       #f))))))
-(define (set-chicken-doc-repository! x)
-  (invalidate-id-cache!)
-  (repository-base x)
-  (unless (verify-repository)
-    (warning "No chicken-doc repository found at" (repository-base))))
+(define +repository-version+ 2)
+
+;; The repository object is a new concept (formerly all fields
+;; were global parameters) so our API does not expect a
+;; repository object to be passed in.  Therefore, we make
+;; current-repository a global parameter.
+
+(define-record-type chicken-doc-repository
+  (make-repository base root magic info id-cache)
+  repository?
+  (base repository-base)
+  (root repository-root)
+  (magic repository-magic)
+  (info repository-information)
+  (id-cache repository-id-cache set-repository-id-cache!))
+
+;; Current repository for node lookup API.
+(define current-repository (make-parameter #f))
+
+;; Return standard location of repository.  Does not
+;; guarantee it exists.
+(define (locate-repository)
+  (or (getenv "CHICKEN_DOC_REPOSITORY")
+      (make-pathname (chicken-home) "chicken-doc")))
+
+;; Open the repository found in the standard location
+;; and set the current repository for the thread.
+(define (verify-repository)  ; legacy name; should be changed
+  (current-repository
+   (open-repository
+    (locate-repository))))
+
+;; Open repository and return new repository object or
+;; throw error if nonexistent or format failure.
+(define (open-repository base)
+  (let ((magic (make-pathname base ".chicken-doc-repo")))
+    (if (file-exists? magic)
+        (let ((info (with-input-from-file magic read)))
+          (let ((version (or (alist-ref 'version info) 0)))
+            (cond ((= version +repository-version+)
+                   (let ((r (make-repository base
+                                             (make-pathname base "root")
+                                             magic
+                                             info
+                                             (make-invalid-id-cache base))))
+                     (set-finalizer! r close-repository)
+                     r))
+                  (else (error "Invalid repo version number ~a, expected ~a\n"
+                                version +repository-version+)))))
+        (error "No chicken-doc repository found at " base))))
+(define (close-repository r)
+  (void))
 
 ;;; REPL
 
@@ -378,8 +424,8 @@
 (when (feature? 'csi)
   ;; Warning -- will execute if called from a script.
   ;; We really only want this to execute at the REPL.
-  (set-chicken-doc-repository! (repository-base) ;; (locate-repository)
-                          )
+  (verify-repository)
+  
   (toplevel-command 'wtf (lambda () (repl-wtf (string-trim-both
                                           (read-line))))
                     ",wtf RE           Regex search with chicken-doc (\"where to find\")")
@@ -388,7 +434,6 @@
                     ",toc PATHSPEC     List contents of path with chicken-doc")
   (toplevel-command 'doc (lambda () (repl-doc-dwim (read)))
                     ",doc PATHSPEC     Describe identifier or path with chicken-doc"))
-
 
 )  ;; end module
 
