@@ -3,9 +3,7 @@
 (include "chicken-doc-text.scm") ; local module
 
 (module chicken-doc
-*
 ;; Used by chicken-doc command
-#;
 (verify-repository
  open-repository close-repository locate-repository current-repository
  repository-base
@@ -23,6 +21,7 @@
 ;; Node API
  lookup-node
  match-nodes
+ match-node-paths/re
  node-signature
  node-type
  node-sxml
@@ -359,9 +358,8 @@
 (define (match-node-paths/re re)
   (let ((rx (irregex re)))
     (validate-id-cache!)
-    (print "match-node-paths/re")
     (map (lambda (path)
-           (lookup-node (string-split path))) ; stupid
+           (lookup-node (string-split path))) ; stupid resplit
          (filter-map (lambda (k)
                        (and (string-search rx k) k))
                      (id-cache-paths (current-id-cache))))))
