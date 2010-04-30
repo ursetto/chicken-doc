@@ -18,6 +18,7 @@
  repository-id-cache set-repository-id-cache!
  path->keys keys->pathname field-filename keys+field->pathname key->id
  make-id-cache id-cache-filename
+ make-repository-placeholder
 ;; Node API
  lookup-node
  match-nodes
@@ -118,7 +119,7 @@
          (dir (keys->pathname keys)))
     (and (directory? dir)
          (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
-                 (directory dir)))))
+                 (sort (directory dir) string<?)))))
 
 (define (node-children node)
   (let ((path (node-path node)))
@@ -468,24 +469,34 @@
    (open-repository
     (locate-repository))))
 
+;; Internal; make a fake repository object containing
+;; all the fields a valid object would have.
+(define (make-repository-placeholder base)
+  (make-repository base
+                   (make-pathname base "root")
+                   (make-pathname base ".chicken-doc-repo")
+                   `((version . ,+repository-version+))
+                   (make-invalid-id-cache base)))
+
 ;; Open repository and return new repository object or
 ;; throw error if nonexistent or format failure.
 (define (open-repository base)
-  (let ((magic (make-pathname base ".chicken-doc-repo")))
-    (if (file-exists? magic)
-        (let ((info (with-input-from-file magic read)))
-          (let ((version (or (alist-ref 'version info) 0)))
-            (cond ((= version +repository-version+)
-                   (let ((r (make-repository base
-                                             (make-pathname base "root")
-                                             magic
-                                             info
-                                             (make-invalid-id-cache base))))
-                     (set-finalizer! r close-repository)
-                     r))
-                  (else (error "Invalid repo version number ~a, expected ~a\n"
-                                version +repository-version+)))))
-        (error "No chicken-doc repository found at " base))))
+  (let ((rp (make-repository-placeholder base)))
+    (let ((magic (repository-magic rp)))
+      (if (file-exists? magic)
+          (let ((info (with-input-from-file magic read)))
+            (let ((version (or (alist-ref 'version info) 0)))
+              (cond ((= version +repository-version+)
+                     (let ((r (make-repository (repository-base rp)
+                                               (repository-root rp)
+                                               magic
+                                               info
+                                               (repository-id-cache rp))))
+                       (set-finalizer! r close-repository)
+                       r))
+                    (else (error "Invalid repo version number ~a, expected ~a\n"
+                                 version +repository-version+)))))
+          (error "No chicken-doc repository found at " base)))))
 (define (close-repository r)
   (void))
 
