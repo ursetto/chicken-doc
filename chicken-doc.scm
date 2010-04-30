@@ -246,11 +246,21 @@
 ;; Cache is unique to repository but is shared between
 ;; threads holding the same repository object.
 (define-record-type id-cache
-  (make-id-cache table mtime filename)
+  (%make-id-cache table mtime filename
+                  ids ; id string list
+                  )
   id-cache?
   (table id-cache-table)
   (mtime id-cache-mtime)
-  (filename id-cache-filename))
+  (filename id-cache-filename)
+  (ids %id-cache-ids))
+
+;; Delayed construction of id string list (IDS) is legal
+;; because cache updates are disallowed.
+(define (make-id-cache table mtime filename)
+  (%make-id-cache table mtime filename
+                  (delay (sort (map symbol->string (hash-table-keys table))
+                               string<?))))
 
 (define (make-invalid-id-cache repo-base)
   (make-id-cache #f 0
@@ -290,6 +300,11 @@
 ;; (define (invalidate-id-cache!)
 ;;   (set-repository-id-cache! (current-repository) (make-invalid-id-cache)))
 
+;; Return a list of sorted IDs as strings, suitable for regex node matching.
+;; Construction is lazy because it is not that cheap.
+(define (id-cache-ids c)
+  (force (%id-cache-ids c)))
+
 ;;; ID search
 
 ;; Returns list of nodes matching identifier ID.
@@ -306,17 +321,13 @@
 ;; Returns list of nodes whose identifiers
 ;; match regex RE.
 (define (match-nodes/re re)
-  (define (cache-keys)
-    (id-cache-keys (current-id-cache)))
   (let ((rx (irregex re)))
     (validate-id-cache!)
-    (let ((keys (sort (map symbol->string (cache-keys))
-                      string<?)))
-      (append-map (lambda (id)
-                    (match-nodes id))
-                  (filter-map (lambda (k)
-                                (and (string-search rx k) k))
-                              keys)))))
+    (append-map (lambda (id)
+                  (match-nodes id))
+                (filter-map (lambda (k)
+                              (and (string-search rx k) k))
+                            (id-cache-ids (current-id-cache))))))
 
 ;;(define ids (sort (flatten (hash-table-fold t (lambda (k v s) (cons (map (lambda (x) (string-intersperse (map ->string (append x (list k))) " ")) v) s)) '())) string<?))
 ;;(let ((rx (irregex "o.O"))) (filter-map (lambda (k) (and (string-search rx k) k)) ids))
@@ -336,6 +347,22 @@
 ;;    68054 mutations
 ;;      832 minor GCs
 ;;        0 major GCs
+;; after id-cache-ids cache
+;; ,t (match-nodes (irregex "posix"))
+;;    0.036 seconds elapsed
+;;        0 seconds in (major) GC
+;;     9642 mutations
+;;       83 minor GCs
+;;        0 major GCs
+;; ,t (match-nodes (irregex "."))
+;;    1.978 seconds elapsed           ; actually about 10-15 seconds on disk
+;;    0.057 seconds in (major) GC
+;;   147205 mutations
+;;      404 minor GCs
+;;        4 major GCs
+;; time chicken-doc -m . >/dev/null    ; presuming totally warm disk cache
+;; real    0m0.960s
+
 
 ;; Return list of nodes whose identifiers match
 ;; symbol, string or re.
