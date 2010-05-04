@@ -19,6 +19,7 @@
  path->keys keys->pathname field-filename keys+field->pathname key->id
  make-id-cache id-cache-filename
  make-repository-placeholder
+ repository-modification-time
 ;; Node API
  lookup-node
  match-nodes
@@ -198,6 +199,20 @@
     (and (file-exists? file)
          (read-file file))))
 
+#|
+(define (node-modification-time node)
+  ;; hypothetical function returning the last update time of a node.
+  ;; The most accurate result is probably obtained by returning the
+  ;; mtime of the ,meta file.  Clients may also want to know when
+  ;; children have been updated (or at least when the child IDs change).
+  ;; It may be sufficient to check the parent directory mtime or
+  ;; the max of that and ,meta since rename, add and delete of child
+  ;; directories will change parent mtime.  Parent mtime is usually
+  ;; not affected when ,meta or ,sxml file is overwritten, though.
+  )
+  
+|#
+
 ;;; Describe
 
 ;; Utility procedure (dropped in Chicken >= 4.3.2)
@@ -296,8 +311,8 @@
 (define (id-cache-keys c)
   (hash-table-keys (id-cache-table c)))
 
-;; Validate and update the shared id cache in the current repository.
-(define (validate-id-cache!)
+;; Validate and update the shared id cache in repository R.
+(define (validate-id-cache! r)
   (define (read-id-cache! r c)
     (define (read-id-cache c)
       (let ((fn (id-cache-filename c)))
@@ -313,8 +328,7 @@
   ;; All that (should) happen is that when the cache is (rarely)
   ;; updated, if two threads validate at the same time both will
   ;; read the entire cache in.
-  (let* ((r (current-repository))
-         (c (repository-id-cache r)))
+  (let* ((c (repository-id-cache r)))
     (when (< (id-cache-mtime c)
              (file-modification-time (id-cache-filename c)))
       (read-id-cache! r c))))
@@ -338,7 +352,7 @@
 (define (match-nodes/id id)
   (define (lookup id)
     (id-cache-ref (current-id-cache) id))
-  (validate-id-cache!)
+  (validate-id-cache! (current-repository))
   (let ((id (if (string? id) (string->symbol id) id)))
     (map (lambda (x)
            (lookup-node (append x (list id))))
@@ -348,7 +362,7 @@
 ;; match regex RE.
 (define (match-nodes/re re)
   (let ((rx (irregex re)))
-    (validate-id-cache!)
+    (validate-id-cache! (current-repository))
     (append-map (lambda (id)
                   (match-nodes id))
                 (filter-map (lambda (k)
@@ -358,7 +372,7 @@
 ;; Match against full node paths with RE.
 (define (match-node-paths/re re)
   (let ((rx (irregex re)))
-    (validate-id-cache!)
+    (validate-id-cache! (current-repository))
     (map (lambda (path)
            (lookup-node (string-split path))) ; stupid resplit
          (filter-map (lambda (k)
@@ -499,6 +513,13 @@
           (error "No chicken-doc repository found at " base)))))
 (define (close-repository r)
   (void))
+
+;; Last modification time of entire repository.  We just use the mtime
+;; of the id cache, as update operations do not modify any global timestamp.
+;; This means stale data may be returned until the cache is refreshed.
+(define (repository-modification-time r)
+  (validate-id-cache! r)  ;; may be wasteful, but we need the current mtime
+  (id-cache-mtime (repository-id-cache r)))
 
 ;;; REPL
 
