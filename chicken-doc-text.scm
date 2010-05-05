@@ -59,7 +59,7 @@
   (define (extract-table-items table cell-ss)
     ;; returns ( (td td ...) (td td ...) )
     ;; with TD flattened into strings and wrapped
-    (let ((cell-ss `((@ . ,drop-tag)
+    (let ((cell-ss `((@ *preorder* . ,drop-tag)
                      . ,cell-ss)))
       (filter-map (match-lambda (('tr . tds)
                             (filter-map
@@ -85,11 +85,15 @@
     (letrec
         ((default-elts
           `((*text* . ,(lambda (tag text) text))
-            (*default* . ,(lambda (tag . body) (warning "dropped" tag) '()))))
+            (*default* . ,(lambda (tag . body) (warning "dropped" (cons tag body)) '()))))
          (inline-elts
           `((b . ,(lambda (tag . body) `("_" ,body "_")))
             (i . ,(lambda (tag . body) `("/" ,body "/")))
             (tt . ,(lambda (tag . body) `("`" ,body "`")))
+            (sub . ,(lambda (tag . body) body))
+            (sup . ,(lambda (tag . body) body))
+            (big . ,(lambda (tag . body) body))
+            (small . ,(lambda (tag . body) body))
 
             (link . ,(lambda (tag href #!optional (desc #f))
                        (if desc
@@ -261,8 +265,8 @@
                                              ss)))
                               (*default* . ,drop-tag)))))
             
-            (tags . ,drop-tag)
-            (toc . ,drop-tag)))
+            (tags *preorder* . ,drop-tag)
+            (toc *preorder* . ,drop-tag)))
 
          (ss `(,@block-elts
                ,@inline-elts
