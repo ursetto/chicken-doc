@@ -24,6 +24,7 @@
  lookup-node
  match-nodes
  match-node-paths/re
+ match-ids/prefix
  node-signature
  node-type
  node-sxml
@@ -392,6 +393,63 @@
          (filter-map (lambda (k)
                        (and (string-search rx k) k))
                      (id-cache-paths (current-id-cache))))))
+
+;; Search for "nearest" VAL in vector V at start or end of a range.
+;; START? is a boolean indicating whether this is the start or end of
+;; the range.  INCLUSIVE? is a boolean indicating whether VAL itself
+;; should be included in the results.  CMP is a procedure of two
+;; arguments x y which returns < 0 if x < y, 0 if x = y, or > 0 if x >
+;; y.  Returns a vector index of the nearest value; in "start" mode
+;; this is inclusive, in "end" mode it is exclusive.
+(define (binary-search-nearest v val cmp start? inclusive?)
+  (let ((len (vector-length v)))
+    (let lp ((L 0)
+             (R len))
+      (let ((M (fx/ (fx+ R L) 2)))
+        (let ((item (vector-ref v M)))
+          ;;(printf "item: ~a L: ~a M: ~a R: ~a\n" item L M R)
+          (let ((dir (cmp val item)))
+            (cond ((fx= dir 0)
+                   (if inclusive?
+                       (if start? M (fx+ M 1))
+                       (if start? (fx+ M 1) M)))
+                  ((fx< dir 0)
+                   (if (fx> M L)
+                       (lp L M)
+                       M))           ; not sure this can happen
+                  (else
+                   (if (fx< M (- R 1))
+                       (lp M R)
+                       (fx+ M 1))))))))))
+
+(use (only vector-lib vector-copy))                                   ;grr
+;; Return a vector (??) of identifier name strings which match the prefix STR.
+(define (match-ids/prefix str #!optional (limit #f))  ; probably not the best name
+  (define (strcmp x y)
+    (cond ((string<? x y) -1)
+          ((string=? x y) 0)
+          (else 1)))
+  (define (binary-search-range v str1 str2)    ; returns [start . end)
+    (cons (binary-search-nearest v str1 strcmp #t #t)
+          (binary-search-nearest v str2 strcmp #f #f)))
+  (define (next-string str)
+    ;; ASSUMING BYTE SEMANTICS!
+    ;; Note that src char #\xff will fail and wrap around.
+    (let ((len (string-length str))
+          (new (string-copy str)))
+      (string-set! new (- len 1)
+                   (integer->char (+ 1 (char->integer
+                                        (string-ref str (- len 1))))))
+      new))
+  (validate-id-cache! (current-repository))
+  (if (= 0 (string-length str))
+      '#()
+      (let ((v (id-cache-ids (current-id-cache))))
+        (match (binary-search-range v str (next-string str))
+               ((start . end)
+                (if limit
+                    (vector-copy v start (min (+ start limit) end))
+                    (vector-copy v start end)))))))
 
 ;; ,t (validate-id-cache!)
 ;;    0.123 seconds elapsed
