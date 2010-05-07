@@ -270,7 +270,7 @@
 ;; threads holding the same repository object.
 (define-record-type id-cache
   (%make-id-cache table mtime filename
-                  ids ; id string list
+                  ids ; id string vector
                   paths ; path string list
                   )
   id-cache?
@@ -284,8 +284,9 @@
 ;; because cache updates are disallowed.
 (define (make-id-cache table mtime filename)
   (%make-id-cache table mtime filename
-                  (delay (sort (map symbol->string (hash-table-keys table))
-                               string<?))
+                  (delay (list->vector
+                          (sort (map symbol->string (hash-table-keys table))
+                                string<?)))
                   (delay (sort
                           (flatten
                            (hash-table-fold
@@ -358,6 +359,19 @@
            (lookup-node (append x (list id))))
          (lookup id))))
 
+(define (vector-filter-map f v)
+  ;; filter-map vector V to list.  this is here because
+  ;; we converted the id-cache-ids to a vector.
+  (let ((len (vector-length v)))
+    (let lp ((i 0) (L '()))
+      (if (fx>= i len)
+          (reverse L)
+          (lp (fx+ i 1)
+              (cond ((f i (vector-ref v i))
+                     => (lambda (x) (cons x L)))
+                    (else
+                     L)))))))
+
 ;; Returns list of nodes whose identifiers
 ;; match regex RE.
 (define (match-nodes/re re)
@@ -365,9 +379,9 @@
     (validate-id-cache! (current-repository))
     (append-map (lambda (id)
                   (match-nodes id))
-                (filter-map (lambda (k)
-                              (and (string-search rx k) k))
-                            (id-cache-ids (current-id-cache))))))
+                (vector-filter-map (lambda (i k)   ; was filter-map
+                                     (and (string-search rx k) k))
+                                   (id-cache-ids (current-id-cache))))))
 
 ;; Match against full node paths with RE.
 (define (match-node-paths/re re)
