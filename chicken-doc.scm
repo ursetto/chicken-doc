@@ -25,6 +25,7 @@
  match-nodes
  match-node-paths/re
  match-ids/prefix
+ match-paths/prefix
  node-signature
  node-type
  node-sxml
@@ -272,7 +273,7 @@
 (define-record-type id-cache
   (%make-id-cache table mtime filename
                   ids ; id string vector
-                  paths ; path string list
+                  paths ; path string vector
                   )
   id-cache?
   (table id-cache-table)
@@ -288,19 +289,20 @@
                   (delay (list->vector
                           (sort (map symbol->string (hash-table-keys table))
                                 string<?)))
-                  (delay (sort
-                          (flatten
-                           (hash-table-fold
-                            table
-                            (lambda (k v s)
-                              (cons
-                               (map (lambda (x)
-                                      (string-intersperse
-                                       (map ->string (append x (list k))) " "))
-                                    v)
-                               s))
-                            '()))
-                          string<?))))
+                  (delay (list->vector
+                          (sort
+                           (flatten
+                            (hash-table-fold
+                             table
+                             (lambda (k v s)
+                               (cons
+                                (map (lambda (x)
+                                       (string-intersperse
+                                        (map ->string (append x (list k))) " "))
+                                     v)
+                                s))
+                             '()))
+                           string<?)))))
 
 (define (make-invalid-id-cache repo-base)
   (make-id-cache #f 0
@@ -390,9 +392,9 @@
     (validate-id-cache! (current-repository))
     (map (lambda (path)
            (lookup-node (string-split path))) ; stupid resplit
-         (filter-map (lambda (k)
-                       (and (string-search rx k) k))
-                     (id-cache-paths (current-id-cache))))))
+         (vector-filter-map (lambda (i k)
+                              (and (string-search rx k) k))
+                            (id-cache-paths (current-id-cache))))))
 
 ;; Search for "nearest" VAL in vector V at start or end of a range.
 ;; START? is a boolean indicating whether this is the start or end of
@@ -423,13 +425,18 @@
                        (fx+ M 1))))))))))
 
 (use (only vector-lib vector-copy))                                   ;grr
-;; Return a vector (??) of identifier name strings which match the prefix STR.
-(define (match-ids/prefix str #!optional (limit #f))  ; probably not the best name
+;; Return a vector (??) of identifier name strings or full path
+;; strings which match the prefix STR.
+(define match-ids/prefix)     ; probably not the best name
+(define match-paths/prefix)
+
+(let ()
   (define (strcmp x y)
     (cond ((string<? x y) -1)
           ((string=? x y) 0)
           (else 1)))
-  (define (binary-search-range v str1 str2)    ; returns [start . end)
+  ;; finds strings in v in range [str1,str2) and returns indices [start . end)
+  (define (binary-search-range v str1 str2)
     (cons (binary-search-nearest v str1 strcmp #t #t)
           (binary-search-nearest v str2 strcmp #f #f)))
   (define (next-string str)
@@ -441,15 +448,25 @@
                    (integer->char (+ 1 (char->integer
                                         (string-ref str (- len 1))))))
       new))
-  (validate-id-cache! (current-repository))
-  (if (= 0 (string-length str))
-      '#()
-      (let ((v (id-cache-ids (current-id-cache))))
+  (define (match-vector v str limit)
+    (if (= 0 (string-length str))
+        '#()
         (match (binary-search-range v str (next-string str))
                ((start . end)
                 (if limit
                     (vector-copy v start (min (+ start limit) end))
-                    (vector-copy v start end)))))))
+                    (vector-copy v start end))))))
+
+  (set! match-ids/prefix
+        (lambda (str #!optional (limit #f))
+          (validate-id-cache! (current-repository))
+          (match-vector (id-cache-ids (current-id-cache))
+                        str limit)))
+  (set! match-paths/prefix
+        (lambda (str #!optional (limit #f))
+          (validate-id-cache! (current-repository))          
+          (match-vector (id-cache-paths (current-id-cache))
+                        str limit))))
 
 ;; ,t (validate-id-cache!)
 ;;    0.123 seconds elapsed
