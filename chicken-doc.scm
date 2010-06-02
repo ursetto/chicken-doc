@@ -198,7 +198,7 @@
 ;; Return SXML document for node.  If small enough, it may be packed
 ;; into the metadata; otherwise read it from the filesystem.
 (define (node-sxml node)
-  (or (node-metadata-field node 'sxml)  ;; FIXME? Returns #f on (sxml . #f)
+  (or (node-metadata-field node 'sxml)  ;; FIXME? Returns #f on (sxml #f)
       (let* ((keys (path->keys (node-path node)))
              (file (keys+field->pathname keys 'sxml)))
         (and (file-exists? file)
