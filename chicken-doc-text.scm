@@ -173,14 +173,14 @@
                         #\newline ; hmm
                         )
                       ))
-            (script . ,(lambda (tag lang . body)
-                         ;; use PRE output for now; ignore LANG
-                         `(#\newline "    "  ; dumb
-                           ,(string-intersperse (string-split (flatten-frags body) "\n" #t)
-                                                "\n    ")
-                           #\newline ; hmm
-                           )
-                         ))
+            (highlight . ,(lambda (tag lang . body)
+                            ;; use PRE output for now; ignore LANG
+                            `(#\newline "    " ; dumb
+                              ,(string-intersperse (string-split (flatten-frags body) "\n" #t)
+                                                   "\n    ")
+                              #\newline ; hmm
+                              )
+                            ))
 
             (def ((sig ,(let ((sign (lambda (tag sig) `(#\newline "-- " ,tag ": " ,sig))))
                           (map (lambda (x) `(,x . ,sign))
