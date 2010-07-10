@@ -202,7 +202,7 @@
       (let* ((keys (path->keys (node-path node)))
              (file (keys+field->pathname keys 'sxml)))
         (and (file-exists? file)
-             (read-file file)))))
+             (with-input-from-file file read)))))
 
 #|
 (define (node-modification-time node)
