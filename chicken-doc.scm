@@ -290,7 +290,8 @@
 (define (make-id-cache table mtime filename)
   (%make-id-cache table mtime filename
                   (delay (list->vector
-                          (sort (map symbol->string (hash-table-keys table))
+                          (sort (map ->string (hash-table-keys table))
+                                ;; ->string not symbol->string to workaround WRITE bug for integer symbols
                                 string<?)))
                   (delay (list->vector
                           (sort
