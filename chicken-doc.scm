@@ -566,7 +566,7 @@
 ;; Return standard location of repository.  Does not
 ;; guarantee it exists.
 (define (locate-repository)
-  (or (getenv "CHICKEN_DOC_REPOSITORY")
+  (or (get-environment-variable "CHICKEN_DOC_REPOSITORY")
       (make-pathname (chicken-home) "chicken-doc")))
 
 ;; Open the repository found in the standard location
