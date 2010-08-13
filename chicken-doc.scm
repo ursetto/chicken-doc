@@ -378,6 +378,21 @@
                      => (lambda (x) (cons x L)))
                     (else
                      L)))))))
+(define (vector-copy v #!optional (start 0) (end (vector-length v)) (fill (void)))
+  ;; SRFI-43 vector-copy.  Why is vector-lib's implementation so verbose?
+  (let ((len (vector-length v)))
+    (when (> start end) (error 'vector-copy "start > end" start end))
+    (when (< start 0)   (error 'vector-copy "start < 0" start))
+    (when (> start len) (error 'copy-vec "start > len" start len))
+    (let ((c (make-vector (- end start))))
+      (let ((end (min end len)))
+        (let loop ((vi start)
+                   (ci 0))
+          (cond ((< vi end)
+                 (vector-set! c ci (vector-ref v vi))
+                 (loop (+ vi 1) (+ ci 1)))
+                (else c)))))))
+
 
 ;; Returns list of nodes whose identifiers
 ;; match regex RE.
@@ -428,7 +443,6 @@
                        (lp M R)
                        (fx+ M 1))))))))))
 
-(use (only vector-lib vector-copy))                                   ;grr
 ;; Return a vector (??) of identifier name strings or full path
 ;; strings which match the prefix STR.
 (define match-ids/prefix)     ; probably not the best name
@@ -457,7 +471,7 @@
         '#()
         (match (binary-search-range v str (next-string str))
                ((start . end)
-                (cond ((= start end) '#()) ; note start may be at end of vector
+                (cond ((= start end) '#()) ; note start may be at end of vector (necessary?)
                       (limit (vector-copy v start (min (+ start limit) end)))
                       (else  (vector-copy v start end)))))))
 
