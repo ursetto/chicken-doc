@@ -471,9 +471,9 @@
         '#()
         (match (binary-search-range v str (next-string str))
                ((start . end)
-                (cond ((= start end) '#()) ; note start may be at end of vector (necessary?)
-                      (limit (vector-copy v start (min (+ start limit) end)))
-                      (else  (vector-copy v start end)))))))
+                (if limit
+                    (vector-copy v start (min (+ start limit) end))
+                    (vector-copy v start end))))))
 
   (set! match-ids/prefix
         (lambda (str #!optional (limit #f))
