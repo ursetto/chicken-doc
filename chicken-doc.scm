@@ -30,6 +30,7 @@
  node-type
  node-sxml
  node-path
+ node-timestamp
  node-children
  node-child-ids         ; experimental
 ;; Other API
@@ -217,6 +218,11 @@
   )
   
 |#
+
+;; Return timestamp of a node in seconds since UNIX epoch,
+;; or #f if no timestamp was available. (Should we return 0 in that case?)
+(define (node-timestamp node)
+  (node-metadata-field node 'timestamp))
 
 ;;; Describe
 
