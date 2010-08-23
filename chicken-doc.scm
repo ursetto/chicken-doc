@@ -98,9 +98,24 @@
         (cond ((null? p) p)
               ((null? (cdr p)) (string->symbol (car p)))
               (else p)))))
-(define (decompose-qualified-path str)
-  (string-split (if (symbol? str) (symbol->string str) str)
-                "#"))
+
+;; Split path STR at #.  However, keep any #+ prefix in the first segment.
+;; In other words, sys#foo#bar -> ("sys" "foo" "bar")
+;; but ##sys#foo#bar -> ("##sys" "foo" "bar")
+;; and #u8 -> ("#u8").  Allows # read syntax and internal namespaces.
+(define (decompose-qualified-path path)
+  (let ((str (if (symbol? path) (symbol->string path) path)))
+    (cond ((string=? str "") '())  ;; string-skip returns #f for ""
+          ((string-skip str #\#)
+           => (lambda (i)
+                (if (= i 0)
+                    (string-split str "#")
+                    (let ((S (string-split (substring str i) "#")))
+                      (cons (string-append (substring str 0 i)
+                                           (car S))
+                            (cdr S))))))
+          (else str)   ;; all #s
+          )))
 
 ;;; Access
 
