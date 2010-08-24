@@ -17,7 +17,7 @@
  repository-magic +repository-version+
  repository-id-cache set-repository-id-cache!
  path->keys keys->pathname field-filename keys+field->pathname key->id
- make-id-cache id-cache-filename
+ make-id-cache id-cache-filename id-cache-table validate-id-cache!
  make-repository-placeholder
  repository-modification-time
 ;; Node API
@@ -307,7 +307,9 @@
   (paths %id-cache-paths))
 
 ;; Delayed construction of id string list and paths is legal
-;; because cache updates are disallowed.
+;; because cache updates are disallowed.  Note that any
+;; change to the id cache on disk will result in revalidation
+;; and full recomputation of the delayed constructors.
 (define (make-id-cache table mtime filename)
   (%make-id-cache table mtime filename
                   (delay (list->vector
