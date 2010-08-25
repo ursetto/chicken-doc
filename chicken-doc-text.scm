@@ -182,7 +182,7 @@
                               )
                             ))
 
-            (def ((sig ,(let ((sign (lambda (tag sig) `(#\newline "-- " ,tag ": " ,sig))))
+            (def ((sig ,(let ((sign (lambda (tag sig . alist) `(#\newline "-- " ,tag ": " ,sig))))
                           (map (lambda (x) `(,x . ,sign))
                                +identifier-tags+))
                        . ,(lambda (tag . body) (list body #\newline))))
