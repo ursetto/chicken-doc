@@ -13,6 +13,8 @@
        (list "procedure" "macro" "read" "parameter"
              "record" "string" "class" "method" "constant")))
 
+(define walk pre-post-order)
+
 ;; sxml-transforms does not allow us to pass state around so we
 ;; use parameters and preorder traversal; it also does not let
 ;; us obtain the current stylesheet bindings, so we must approximate
@@ -182,12 +184,19 @@
                               )
                             ))
 
-            (def ((sig ,(let ((sign (lambda (tag sig . alist) `(#\newline "-- " ,tag ": " ,sig))))
-                          (map (lambda (x) `(,x . ,sign))
-                               +identifier-tags+))
-                       . ,(lambda (tag . body) (list body #\newline))))
+            (def ((sig *preorder*
+                       . ,(lambda (tag . sigs)
+                            (list (map (lambda (s)
+                                         (match s
+                                                ((type sig . alist)
+                                                 ;; don't bother filtering by valid types
+                                                 `(#\newline "-- " ,type ": "
+                                                   ,(walk sig inline-ss)))))
+                                       sigs)
+                                  #\newline))))
                  . ,(lambda (tag . body) body))
 
+            
             (hr .
                 ,(lambda (tag)
                    `(#\newline ,hr-glyph #\newline)))
