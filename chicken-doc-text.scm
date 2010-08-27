@@ -8,11 +8,6 @@
 (require-library srfi-1)
 (import (only srfi-1 filter-map reduce make-list))
 
-(define +identifier-tags+
-  (map string->symbol
-       (list "procedure" "macro" "read" "parameter"
-             "record" "string" "class" "method" "constant")))
-
 (define walk pre-post-order)
 
 ;; sxml-transforms does not allow us to pass state around so we
