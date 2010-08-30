@@ -32,6 +32,7 @@
  node-path
  node-timestamp
  node-children
+ node-child
  node-child-ids         ; experimental
 ;; Other API
  decompose-qualified-path
@@ -120,45 +121,50 @@
 ;;; Access
 
 (define-record-type chicken-doc-node
-  (%make-node path id md)
+  (%make-node path id md pathname)
   node?
   (path node-path)            ; includes ID
   (id node-id)
-  (md node-md))
+  (md node-md)
+  (pathname node-pathname)    ; internal; cached node pathname
+  )
 
-(define (make-node path id)
+(define (make-node path id pathname)
   (%make-node path id
-              (delay (read-path-metadata path))))
+              (delay (read-path-metadata pathname))
+              pathname))
 
 ;; Return string list of child keys (directories) directly under PATH, or #f
-;; if the PATH is invalid.
+;; if the PATH is invalid.  FIXME: might return '() if PATH indicates a
+;; definition node (or that is otherwise indicated).
 
-(define (path-child-keys path)
-  (let* ((keys (path->keys path))
-         (dir (keys->pathname keys)))
+(define (node-child-keys node)
+  (let ((dir (node-pathname node)))
     (and (directory? dir)
          (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
                  (sort (directory dir) string<?)))))
 
 (define (node-children node)
+  (map (lambda (id) (node-child node id))
+       (node-child-ids node)))
+
+;; Returns child node of NODE with id ID, or #f if not found.
+(define (node-child node id)
   (let ((path (node-path node)))
-    (map (lambda (k)
-           (lookup-node (append path (list (key->id k)))))
-         (path-child-keys path))))
+    (let ((child-path (append path (list id)))
+          (child-pathname (make-pathname (node-pathname node) (id->key id))))
+      (and (directory? child-pathname)
+           (make-node child-path id child-pathname)))))
 
-;; Shouldn't be necessary -- normally you should use node-children --
-;; but currently a node lookup populates the node with metadata,
-;; which wastes some time if you only need ids.  Ideally metadata
-;; would be loaded lazily or lookup speed would be faster.
+;; Shortcut if you only need identifiers for node children.
+;; Might be faster than node-children.
 (define (node-child-ids node)
-  (map key->id (path-child-keys (node-path node))))
+  (map key->id (node-child-keys node)))
 
-;; Obtain metadata alist at PATH.  Valid node without metadata record
+;; Obtain metadata alist at node at PATHNAME.  Valid node without metadata record
 ;; returns '().  Invalid node throws error.
-(define (read-path-metadata path)
-  (let* ((keys (path->keys path))
-         (pathname (keys->pathname keys))
-         (metafile (pathname+field->pathname pathname 'meta)))
+(define (read-path-metadata pathname)
+  (let ((metafile (pathname+field->pathname pathname 'meta)))
     (cond ((file-exists? metafile)
            (read-file metafile))
           ((directory? pathname)
@@ -166,7 +172,8 @@
            ;; without metadata, so handle this specially.
            '())
           (else
-           (error "No such identifier" path)))))
+           (error "No such metadata pathname" metafile) ;; internal error
+           ))))
 
 (define (node-metadata-field node field)
   (cond ((assq field (node-metadata node))
@@ -190,8 +197,8 @@
     (let* ((keys (path->keys path))   ; FIXME!! path->keys is noticeably slow [*]
            (pathname (keys->pathname keys)))
       (or (directory? pathname)
-          (error "no such node" path)))          ; now required
-    (make-node path id)))
+          (error "no such node" path))
+      (make-node path id pathname))))
 ; [*] ,t (let loop ((n 100000)) (if (= n 0) 'done (begin (path->keys '(abc def ghi)) (loop (- n 1)))))  -> 1.66 seconds elapsed, 17 major GCs, 1.2M mutations
 ; [*] ,t (let loop ((n 100000)) (if (= n 0) 'done (begin (path->keys '(abc d.f ghi)) (loop (- n 1)))))  -> 2.76 seconds, 40 GCs, 1.6M mutations
 ; [*] ,t (let loop ((n 100000)) (if (= n 0) 'done (begin (path->keys '("abc" "def" "ghi")) (loop (- n 1))))) -> 0.876 seconds, 6 major GCs, 1.2M mutations
@@ -215,8 +222,8 @@
 ;; into the metadata; otherwise read it from the filesystem.
 (define (node-sxml node)
   (or (node-metadata-field node 'sxml)  ;; FIXME? Returns #f on (sxml #f)
-      (let* ((keys (path->keys (node-path node)))
-             (file (keys+field->pathname keys 'sxml)))
+      (let* ((file (pathname+field->pathname (node-pathname node)
+                                             'sxml)))
         (and (file-exists? file)
              (with-input-from-file file read)))))
 
