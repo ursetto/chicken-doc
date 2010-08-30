@@ -184,25 +184,21 @@
   (force (node-md node)))         ;  load metadata as needed
 
 ;; Return node record at PATH or throw error if the record does
-;; not exist (implicitly in read-path-metadata).
+;; not exist.  It would be acceptable to return #f on failure,
+;; like node-child does; the only reason we don't is to
+;; signal to the caller which part of the path lookup failed,
+;; which is perhaps not that useful.
 (define (lookup-node path)
-  (let ((id (if (null? path)
-                ""   ; TOC
-                (last path))))
-    ;; Note that, if metadata is delayed, our API requires that
-    ;; the node be checked for existence here.  If instead nodes
-    ;; were not required to exist, and a manual existence check
-    ;; were possible, we could avoid the directory touch when
-    ;; merely matching against nodes.
-    (let* ((keys (path->keys path))   ; FIXME!! path->keys is noticeably slow [*]
-           (pathname (keys->pathname keys)))
-      (or (directory? pathname)
-          (error "no such node" path))
-      (make-node path id pathname))))
-; [*] ,t (let loop ((n 100000)) (if (= n 0) 'done (begin (path->keys '(abc def ghi)) (loop (- n 1)))))  -> 1.66 seconds elapsed, 17 major GCs, 1.2M mutations
-; [*] ,t (let loop ((n 100000)) (if (= n 0) 'done (begin (path->keys '(abc d.f ghi)) (loop (- n 1)))))  -> 2.76 seconds, 40 GCs, 1.6M mutations
-; [*] ,t (let loop ((n 100000)) (if (= n 0) 'done (begin (path->keys '("abc" "def" "ghi")) (loop (- n 1))))) -> 0.876 seconds, 6 major GCs, 1.2M mutations
-;; uri-encode-string takes 5x as long as id->key, skip it
+  (define (make-root-node)
+    (make-node '() "" (keys->pathname '())))
+  (let loop ((node (make-root-node))
+             (P path))
+    (if (null? P)
+        node
+        (loop (or (node-child node (car P))
+                  (error 'lookup-node "node path not found"
+                         `(,@(node-path node) ,(car P))))
+              (cdr P)))))
 
 ;; Return string representing signature of PATH.  If no signature, return "".
 (define (node-signature node)
