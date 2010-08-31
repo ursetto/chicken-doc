@@ -130,13 +130,16 @@
   )
 
 (define (make-node path id pathname)
-  (%make-node path id
-              (delay (read-path-metadata pathname))
-              pathname))
+  (letrec ((n (%make-node path id
+                          (delay
+                            `((defs ,(delay (extract-definitions (node-sxml n))))
+                              . ,(read-path-metadata pathname)))
+                          pathname)))
+    n))
 
 ;; Return string list of child keys (directories) directly under PATH, or #f
 ;; if the PATH is invalid.  FIXME: might return '() if PATH indicates a
-;; definition node (or that is otherwise indicated).
+;; definition node (or if that is otherwise indicated).
 
 (define (node-child-keys node)
   (let ((dir (node-pathname node)))
@@ -144,22 +147,86 @@
          (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
                  (sort (directory dir) string<?)))))
 
-(define (node-children node)
+(define (node-children node)   ;; FIXME: inefficient for definition children.
   (map (lambda (id) (node-child node id))
        (node-child-ids node)))
 
 ;; Returns child node of NODE with id ID, or #f if not found.
 (define (node-child node id)
-  (let ((path (node-path node)))
-    (let ((child-path (append path (list id)))
-          (child-pathname (make-pathname (node-pathname node) (id->key id))))
-      (and (directory? child-pathname)
-           (make-node child-path id child-pathname)))))
+  (let ((path (node-path node))
+        (pathname (node-pathname node)))
+    (and (directory? pathname)                       ;; FIXME: actually a check for definition node class.
+         (let ((child-path (append path (list id)))
+               (child-pathname (make-pathname pathname (id->key id))))
+           (if (directory? child-pathname)
+               (make-node child-path id child-pathname)
+               ;; FIXME: probably we should check existence before the definition constructor
+               ;; FIXME: Note ->string in id.
+               (make-definition-node node child-path (->string id)))))))
 
 ;; Shortcut if you only need identifiers for node children.
 ;; Might be faster than node-children.
 (define (node-child-ids node)
-  (map key->id (node-child-keys node)))
+  (append (map key->id (node-child-keys node))
+          (node-definition-ids node)))
+
+
+;; Copy-and-paste from chicken-doc-parser :(
+(define (extract-definitions doc)
+  (define (gather doc sym)              ;(sxpath '(// sym))
+    (cond ((null? doc) '())
+          ((pair? doc)
+           (if (eq? (car doc) sym)
+               (list doc)
+               (append-map (lambda (x) (gather x sym))
+                           doc)))
+          (else '())))
+  (gather doc 'def))
+
+(define (node-definition-ids node)
+  (let next-def ((defs (node-definitions node))
+                 (ids '()))
+    (if (null? defs)
+        ids
+        (let next-sig ((sigs (cdadr (car defs))) (sigids '()))
+          (if (null? sigs)
+              (next-def (cdr defs)
+                        (append sigids ids))
+              (let* ((x (car sigs)) (type (car x)) (sig (cadr x)) (alist (cddr x)))
+                (next-sig
+                 (cdr sigs)
+                 (cons
+                  (cond ((assq 'id alist) => cadr) ;; Check for pre-parsed ID.
+                        (else
+                         (error 'node-definition-ids "preparsed ID unavailable")))
+                  sigids))))))))
+
+(define (make-definition-node parent path id)    ;; FIXME: id not current guaranteed to exist
+  ;; FIXME: extremely slow for random lookups, and redundant
+  ;; FIXME: note ->string in id lookup
+  (define (find-sig def id)
+    (let ((sigs (cdadr def)))
+      (find (lambda (s) (cond ((assq 'id (cddr s))
+                          => (lambda (idc) (equal? id (->string (cadr idc)))))
+                         (else #f)))
+            sigs)))
+  (define (get-definition-sxml parent id)              ; hashtable better
+    (find (lambda (def)
+            (find-sig def id))
+          (node-definitions parent)))
+  (define (definition-sxml->metadata sxml parent id)
+    (let ((s (find-sig sxml id)))
+      (if s
+          (let ((type (car s)) (signature (cadr s)))
+            `((type ,type)
+              (signature ,signature)
+              (timestamp ,(node-timestamp parent))
+              (sxml ,sxml)))
+          (error 'definition-sxml->metadata "no match for id in signature" id))))
+  (%make-node path id
+              (definition-sxml->metadata (get-definition-sxml parent id) parent id)
+              (make-pathname (node-pathname parent) ",meta") ;; special -- non-dir indicates definition node
+              ))
 
 ;; Obtain metadata alist at node at PATHNAME.  Valid node without metadata record
 ;; returns '().  Invalid node throws error.
@@ -182,6 +249,9 @@
 
 (define (node-metadata node)
   (force (node-md node)))         ;  load metadata as needed
+
+(define (node-definitions node)
+  (force (node-metadata-field node 'defs)))
 
 ;; Return node record at PATH or throw error if the record does
 ;; not exist.  It would be acceptable to return #f on failure,
