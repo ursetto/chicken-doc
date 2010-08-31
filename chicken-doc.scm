@@ -121,21 +121,47 @@
 ;;; Access
 
 (define-record-type chicken-doc-node
-  (%make-node path id md pathname)
+  (%make-node path id md pathname definfo)
   node?
   (path node-path)            ; includes ID
   (id node-id)
   (md node-md)
   (pathname node-pathname)    ; internal; cached node pathname
+  (definfo %node-definfo)    ; internal; node definitions record
   )
 
+(define (node-definfo n)
+  (force (%node-definfo n)))
+
+(define-record-type chicken-doc-node-definfo
+  (make-node-definfo index start pathname)
+  node-definfo?
+  (index node-definfo-index)
+  (start node-definfo-start)
+  (pathname node-definfo-pathname))
+
+(define (node-definfo-keys D)
+  (map car (node-definfo-index D)))
+(define (node-definfo-offset D id)
+  (cond ((assoc id (node-definfo-index D))
+         => cadr)
+        (else #f)))
+(define (node-definfo-sxml D id)
+  (cond ((node-definfo-offset D id)
+         => (lambda (o)
+              (let ((pos (+ o (node-definfo-start D))))
+                (call-with-input-file*
+                 (node-definfo-pathname D)
+                 (lambda (p)
+                   (set-file-position! p pos seek/set)
+                   (read p))))))
+        (else #f)))
+
 (define (make-node path id pathname)
-  (letrec ((n (%make-node path id
-                          (delay
-                            `((defs ,(delay (extract-definitions (node-sxml n))))
-                              . ,(read-path-metadata pathname)))
-                          pathname)))
-    n))
+  (%make-node path id
+              (delay (read-path-metadata pathname))
+              pathname
+              (delay (read-definfo pathname))))
 
 ;; Return string list of child keys (directories) directly under PATH, or #f
 ;; if the PATH is invalid.  FIXME: might return '() if PATH indicates a
@@ -170,50 +196,37 @@
   (append (map key->id (node-child-keys node))
           (node-definition-ids node)))
 
-
-;; Copy-and-paste from chicken-doc-parser :(
-(define (extract-definitions doc)
-  (define (gather doc sym)              ;(sxpath '(// sym))
-    (cond ((null? doc) '())
-          ((pair? doc)
-           (if (eq? (car doc) sym)
-               (list doc)
-               (append-map (lambda (x) (gather x sym))
-                           doc)))
-          (else '())))
-  (gather doc 'def))
+;; (define (node-definition-ids node)
+;;   (let next-def ((defs (node-definitions node))
+;;                  (ids '()))
+;;     (if (null? defs)
+;;         ids
+;;         (let next-sig ((sigs (cdadr (car defs))) (sigids '()))
+;;           (if (null? sigs)
+;;               (next-def (cdr defs)
+;;                         (append sigids ids))
+;;               (let* ((x (car sigs)) (type (car x)) (sig (cadr x)) (alist (cddr x)))
+;;                 (next-sig
+;;                  (cdr sigs)
+;;                  (cons
+;;                   (cond ((assq 'id alist) => cadr) ;; Check for pre-parsed ID.
+;;                         (else
+;;                          (error 'node-definition-ids "preparsed ID unavailable")))
+;;                   sigids))))))))
 
 (define (node-definition-ids node)
-  (let next-def ((defs (node-definitions node))
-                 (ids '()))
-    (if (null? defs)
-        ids
-        (let next-sig ((sigs (cdadr (car defs))) (sigids '()))
-          (if (null? sigs)
-              (next-def (cdr defs)
-                        (append sigids ids))
-              (let* ((x (car sigs)) (type (car x)) (sig (cadr x)) (alist (cddr x)))
-                (next-sig
-                 (cdr sigs)
-                 (cons
-                  (cond ((assq 'id alist) => cadr) ;; Check for pre-parsed ID.
-                        (else
-                         (error 'node-definition-ids "preparsed ID unavailable")))
-                  sigids))))))))
+  (sort (node-definfo-keys (node-definfo node))
+        string<))
 
 (define (make-definition-node parent path id)    ;; FIXME: id not current guaranteed to exist
-  ;; FIXME: extremely slow for random lookups, and redundant
-  ;; FIXME: note ->string in id lookup
   (define (find-sig def id)
     (let ((sigs (cdadr def)))
       (find (lambda (s) (cond ((assq 'id (cddr s))
                           => (lambda (idc) (equal? id (->string (cadr idc)))))
                          (else #f)))
             sigs)))
-  (define (get-definition-sxml parent id)              ; hashtable better
-    (find (lambda (def)
-            (find-sig def id))
-          (node-definitions parent)))
+  (define (get-definition-sxml parent id)
+    (node-definfo-sxml (node-definfo parent) id))
   (define (definition-sxml->metadata sxml parent id)
     (let ((s (find-sig sxml id)))
       (if s
@@ -225,7 +238,8 @@
           (error 'definition-sxml->metadata "no match for id in signature" id))))
   (%make-node path id
               (definition-sxml->metadata (get-definition-sxml parent id) parent id)
-              (make-pathname (node-pathname parent) ",meta") ;; special -- non-dir indicates definition node
+              (pathname+field->pathname (node-pathname parent) 'defs) ;; tmp -- non-dir indicates def node
+              (make-node-definfo '() 0 #f)   ;; should this just be #f?
               ))
 
 ;; Obtain metadata alist at node at PATHNAME.  Valid node without metadata record
@@ -241,6 +255,26 @@
           (else
            (error "No such metadata pathname" metafile) ;; internal error
            ))))
+
+(define (call-with-input-file* file proc)
+  (let ((p (open-input-file file)))
+    (handle-exceptions exn (begin (close-input-port p)
+                                  (signal exn))
+      (let ((rc (proc p)))
+        (close-input-port p)
+        rc))))
+(define (read-definfo pathname)
+  (let ((deffile (pathname+field->pathname pathname 'defs)))
+    (cond ((file-exists? deffile)
+           (call-with-input-file* deffile
+             (lambda (p)
+               (let ((index (read p)))
+                 (unless (and (pair? index)
+                              (eq? (car index) 'index))
+                   (error "Invalid file format in definition index"))
+                 (make-node-definfo (cdr index) (file-position p) deffile)))))
+          (else
+           (make-node-definfo '() 0 #f)))))
 
 (define (node-metadata-field node field)
   (cond ((assq field (node-metadata node))
