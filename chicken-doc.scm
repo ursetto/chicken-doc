@@ -216,7 +216,7 @@
 
 (define (node-definition-ids node)
   (sort (node-definfo-keys (node-definfo node))
-        string<))
+        string<?))
 (define (node-definition-id? node id)
   (and-let* ((D (node-definfo node))       ;; check if this node is in the definition index
              (I (node-definfo-index D)))
