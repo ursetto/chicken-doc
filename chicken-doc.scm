@@ -256,7 +256,7 @@
 (define (read-path-metadata pathname)
   (let ((metafile (pathname+field->pathname pathname 'meta)))
     (cond ((file-exists? metafile)
-           (read-file metafile))
+           (call-with-input-file* metafile read-file)) ;; ensure binary read
           ((directory? pathname)
            ;; write-keys may create intermediate container directories
            ;; without metadata, so handle this specially.
@@ -266,7 +266,7 @@
            ))))
 
 (define (call-with-input-file* file proc)
-  (let ((p (open-input-file file)))
+  (let ((p (open-input-file file #:binary)))
     (handle-exceptions exn (begin (close-input-port p)
                                   (signal exn))
       (let ((rc (proc p)))
@@ -282,7 +282,7 @@
                               (eq? (car index) 'index))
                    (error "Invalid file format in definition index"))
                  (make-node-definfo (alist->hash-table (cdr index) string=?)
-                                    (file-position p) deffile)))))
+                                    (+ (file-position p) 1) deffile)))))
           (else
            (make-empty-node-definfo)))))
 
