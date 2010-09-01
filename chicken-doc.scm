@@ -30,6 +30,7 @@
  node-type
  node-sxml
  node-path
+ node-id
  node-timestamp
  node-children
  node-child
