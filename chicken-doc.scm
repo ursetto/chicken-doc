@@ -169,9 +169,10 @@
 
 (define (node-child-keys node)
   (let ((dir (node-pathname node)))
-    (and (directory? dir)
-         (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
-                 (sort (directory dir) string<?)))))
+    (if (directory? dir)
+        (filter (lambda (x) (not (eqv? (string-ref x 0) #\,)))  ;; Contains hardcoded ,
+                (sort (directory dir) string<?))
+        '())))
 
 (define (node-children node)   ;; FIXME: inefficient for definition children.
   (map (lambda (id) (node-child node id))
