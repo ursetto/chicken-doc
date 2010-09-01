@@ -182,12 +182,10 @@
 (define (node-child node id)
   (let ((path (node-path node))
         (pathname (node-pathname node)))
-    (let ((child-path (append path (list id))))
-      (or (and-let* ((D (node-definfo node))       ;; check if this node is in the definition index
-                     (I (node-definfo-index D))
-                     (idstr (->string id))
-                     ((hash-table-exists? I idstr)))
-            (make-definition-node node child-path idstr))
+    (let ((child-path (append path (list id)))
+          (idstr (->string id)))
+      (if (node-definition-id? node idstr)
+          (make-definition-node node child-path idstr)
           (let ((child-pathname (make-pathname pathname (id->key id))))  ;; otherwise regular node
             (and (directory? child-pathname)
                  (make-node child-path id child-pathname)))))))
@@ -219,8 +217,12 @@
 (define (node-definition-ids node)
   (sort (node-definfo-keys (node-definfo node))
         string<))
+(define (node-definition-id? node id)
+  (and-let* ((D (node-definfo node))       ;; check if this node is in the definition index
+             (I (node-definfo-index D)))
+    (hash-table-exists? I (->string id))))
 
-(define (make-definition-node parent path id)    ;; FIXME: id not current guaranteed to exist
+(define (make-definition-node parent path id)
   (define (find-sig def id)
     (let ((sigs (cdadr def)))
       (find (lambda (s) (cond ((assq 'id (cddr s))
@@ -241,8 +243,7 @@
   (%make-node path id
               (definition-sxml->metadata (get-definition-sxml parent id) parent id)
               (pathname+field->pathname (node-pathname parent) 'defs) ;; tmp -- non-dir indicates def node
-              (make-empty-node-definfo)   ;; should this just be #f?
-              ))
+              (make-empty-node-definfo)))
 
 ;; Obtain metadata alist at node at PATHNAME.  Valid node without metadata record
 ;; returns '().  Invalid node throws error.
