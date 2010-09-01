@@ -1,15 +1,17 @@
-(compile -s -O2 -d2 -S chicken-doc.scm -j chicken-doc -j chicken-doc-text)
+(define version "0.4.0")
+
+(compile -s -O2 -d1 -S chicken-doc.scm -j chicken-doc -j chicken-doc-text)
 (compile -s -O2 -d0 chicken-doc.import.scm)
 (compile -s -O2 -d0 chicken-doc-text.import.scm)    ; annoying
-(compile -o chicken-doc -O2 -d2 -S chicken-doc-cmd.scm)
+(compile -o chicken-doc -O2 -d1 -S chicken-doc-cmd.scm)
 
 (install-extension
   'chicken-doc
   '("chicken-doc.so" "chicken-doc.import.so" "chicken-doc-text.import.so")
-  `((version 0.3.15)
+  `((version ,version)
     (documentation "chicken-doc.html")))
 
 (install-program
  'chicken-doc-cmd
  '("chicken-doc")
- `((version 0.3.15)))
+ `((version ,version)))

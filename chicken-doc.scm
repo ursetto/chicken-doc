@@ -13,7 +13,7 @@
  describe
  doc-dwim
 ;; Used additionally by chicken-doc-admin.  Somewhat internal, but exported.
- repository-information repository-root
+ repository-information repository-root open-repository*
  repository-magic +repository-version+
  repository-id-cache set-repository-id-cache!
  path->keys keys->pathname field-filename keys+field->pathname key->id
@@ -33,7 +33,9 @@
  node-timestamp
  node-children
  node-child
- node-child-ids         ; experimental
+ node-child-ids
+ node-definition-ids    ;experimental
+ node-definition-id?    ;experimental
 ;; Other API
  decompose-qualified-path
 ;; Parameters
@@ -143,7 +145,10 @@
 (define (make-empty-node-definfo)
   (make-node-definfo #f 0 #f))
 (define (node-definfo-keys D)
-  (hash-table-keys (node-definfo-index D)))
+  (let ((I (node-definfo-index D)))
+    (if I
+        (hash-table-keys (node-definfo-index D))
+        '())))
 (define (node-definfo-offset D id)
   (car (hash-table-ref/default (node-definfo-index D) id '(#f))))
 (define (node-definfo-sxml D id)
@@ -692,7 +697,7 @@
 
 ;;; Repository
 
-(define +repository-version+ 2)
+(define +repository-version+ 3)
 
 ;; The repository object is a new concept (formerly all fields
 ;; were global parameters) so our API does not expect a
@@ -734,24 +739,33 @@
                    (make-invalid-id-cache base)))
 
 ;; Open repository and return new repository object or
-;; throw error if nonexistent or format failure.
-(define (open-repository base)
+;; throw error if nonexistent or unknown format.  May accept
+;; some old repository formats, so this repo MUST only be
+;; passed to procedures which explicitly handle old formats.
+;; Currently, that is only destroy-repository!.
+(define (open-repository* base)
   (let ((rp (make-repository-placeholder base)))
     (let ((magic (repository-magic rp)))
       (if (file-exists? magic)
           (let ((info (with-input-from-file magic read)))
-            (let ((version (or (alist-ref 'version info) 0)))
-              (cond ((= version +repository-version+)
-                     (let ((r (make-repository (repository-base rp)
-                                               (repository-root rp)
-                                               magic
-                                               info
-                                               (repository-id-cache rp))))
-                       (set-finalizer! r close-repository)
-                       r))
-                    (else (error "Invalid repo version number ~a, expected ~a\n"
-                                 version +repository-version+)))))
-          (error "No chicken-doc repository found at " base)))))
+            (let ((r (make-repository (repository-base rp)
+                                      (repository-root rp)
+                                      magic
+                                      info
+                                      (repository-id-cache rp))))
+              (set-finalizer! r close-repository)
+              r))
+          (error "No chicken-doc repository found at" base)))))
+;; Open repository like open-repository*, but only permit the
+;; current repository format.  Unless otherwise stated, procedures can only
+;; handle the current format, and rely on the check happening at open time.
+(define (open-repository base)
+  (let ((r (open-repository* base)))
+    (let ((version (or (alist-ref 'version (repository-information r)) 0)))
+      (cond ((= version +repository-version+)
+             r)
+            (else (error (sprintf "Invalid repository version number ~a, expected ~a\n"
+                                          version +repository-version+)))))))
 (define (close-repository r)
   (void))
 
