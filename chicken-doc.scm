@@ -140,12 +140,12 @@
   (start node-definfo-start)
   (pathname node-definfo-pathname))
 
+(define (make-empty-node-definfo)
+  (make-node-definfo #f 0 #f))
 (define (node-definfo-keys D)
-  (map car (node-definfo-index D)))
+  (hash-table-keys (node-definfo-index D)))
 (define (node-definfo-offset D id)
-  (cond ((assoc id (node-definfo-index D))
-         => cadr)
-        (else #f)))
+  (car (hash-table-ref/default (node-definfo-index D) id '(#f))))
 (define (node-definfo-sxml D id)
   (cond ((node-definfo-offset D id)
          => (lambda (o)
@@ -182,14 +182,15 @@
 (define (node-child node id)
   (let ((path (node-path node))
         (pathname (node-pathname node)))
-    (and (directory? pathname)                       ;; FIXME: actually a check for definition node class.
-         (let ((child-path (append path (list id)))
-               (child-pathname (make-pathname pathname (id->key id))))
-           (if (directory? child-pathname)
-               (make-node child-path id child-pathname)
-               ;; FIXME: probably we should check existence before the definition constructor
-               ;; FIXME: Note ->string in id.
-               (make-definition-node node child-path (->string id)))))))
+    (let ((child-path (append path (list id))))
+      (or (and-let* ((D (node-definfo node))       ;; check if this node is in the definition index
+                     (I (node-definfo-index D))
+                     (idstr (->string id))
+                     ((hash-table-exists? I idstr)))
+            (make-definition-node node child-path idstr))
+          (let ((child-pathname (make-pathname pathname (id->key id))))  ;; otherwise regular node
+            (and (directory? child-pathname)
+                 (make-node child-path id child-pathname)))))))
 
 ;; Shortcut if you only need identifiers for node children.
 ;; Might be faster than node-children.
@@ -240,7 +241,7 @@
   (%make-node path id
               (definition-sxml->metadata (get-definition-sxml parent id) parent id)
               (pathname+field->pathname (node-pathname parent) 'defs) ;; tmp -- non-dir indicates def node
-              (make-node-definfo '() 0 #f)   ;; should this just be #f?
+              (make-empty-node-definfo)   ;; should this just be #f?
               ))
 
 ;; Obtain metadata alist at node at PATHNAME.  Valid node without metadata record
@@ -273,9 +274,10 @@
                  (unless (and (pair? index)
                               (eq? (car index) 'index))
                    (error "Invalid file format in definition index"))
-                 (make-node-definfo (cdr index) (file-position p) deffile)))))
+                 (make-node-definfo (alist->hash-table (cdr index) string=?)
+                                    (file-position p) deffile)))))
           (else
-           (make-node-definfo '() 0 #f)))))
+           (make-empty-node-definfo)))))
 
 (define (node-metadata-field node field)
   (cond ((assq field (node-metadata node))
