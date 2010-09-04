@@ -150,13 +150,6 @@
                                         (pre-post-order defs inline-ss)))))
                            (extract-dl-items items)))))
             
-            (dl ((dt . ,(lambda (tag . body)
-                          `(#\newline "- " ,body ": ")))
-                 (dd . ,(lambda (tag . body)
-                          body)))
-                . ,(lambda (tag . body)
-                     body))
-            
             (p . ,(lambda (tag . body)
                     (let ((str (flatten-frags body)))  ; FIXME remove if no wrap
                       `(#\newline
