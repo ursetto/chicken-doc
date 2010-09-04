@@ -141,20 +141,22 @@
                    `(#\newline
                      ,(map (match-lambda
                             ((term . defs)
-                             (let ((prefix (string-append
-                                            "- " (flatten-frags (pre-post-order term inline-ss))
-                                            ": ")))
-                               (let* ((global-indent-limit (inexact->exact (truncate (* .15 wrap))))
-                                      (desc-indent-limit (max 0 (- global-indent-limit (list-indent))))
-                                      (prefix-split-left (min desc-indent-limit (string-length prefix)))
-                                      (prefix-prefix (substring prefix 0 prefix-split-left))
-                                      (prefix-suffix (substring prefix prefix-split-left)))
-                                 (indent-and-wrap-with-bullet
-                                  (list-indent) wrap
-                                        ; FIXME: multiple defs should be displayed separately
-                                  prefix-prefix
-                                  (cons prefix-suffix
-                                        (pre-post-order defs inline-ss)))))))
+                             (let* ((term (flatten-frags (pre-post-order term inline-ss)))
+                                    (bullet (string-append "- " term ": ")))
+                               ;; Indent the term's description to align with the term.
+                               ;; If this indent exceeds 25% of the output width, just
+                               ;; align to the "- " bullet as in a normal list.
+                               (let* ((indent-limit (inexact->exact (truncate (* .25 wrap))))
+                                      (desc-indent-limit (max 0 (- indent-limit (list-indent)))))
+                                 (if (> (string-length bullet) desc-indent-limit)
+                                     (indent-and-wrap-with-bullet
+                                      (list-indent) wrap "- "
+                                      (cons (string-append term ": ")
+                                            (pre-post-order defs inline-ss)))
+                                     (indent-and-wrap-with-bullet
+                                      (list-indent) wrap bullet
+                                      ;; FIXME: multiple defs should be displayed separately
+                                      (pre-post-order defs inline-ss)))))))
                            (extract-dl-items items)))))
             
             (p . ,(lambda (tag . body)
