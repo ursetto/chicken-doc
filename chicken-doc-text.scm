@@ -144,10 +144,17 @@
                              (let ((prefix (string-append
                                             "- " (flatten-frags (pre-post-order term inline-ss))
                                             ": ")))
-                                       (indent-and-wrap-with-bullet
-                                        (list-indent) wrap prefix
+                               (let* ((global-indent-limit (inexact->exact (truncate (* .15 wrap))))
+                                      (desc-indent-limit (max 0 (- global-indent-limit (list-indent))))
+                                      (prefix-split-left (min desc-indent-limit (string-length prefix)))
+                                      (prefix-prefix (substring prefix 0 prefix-split-left))
+                                      (prefix-suffix (substring prefix prefix-split-left)))
+                                 (indent-and-wrap-with-bullet
+                                  (list-indent) wrap
                                         ; FIXME: multiple defs should be displayed separately
-                                        (pre-post-order defs inline-ss)))))
+                                  prefix-prefix
+                                  (cons prefix-suffix
+                                        (pre-post-order defs inline-ss)))))))
                            (extract-dl-items items)))))
             
             (p . ,(lambda (tag . body)
