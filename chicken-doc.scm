@@ -6,14 +6,13 @@
 ;; Used by chicken-doc command
 (verify-repository
  open-repository close-repository locate-repository current-repository
- repository-base
  describe-signatures
  search-only
  describe-contents
  describe
  doc-dwim
 ;; Used additionally by chicken-doc-admin.  Somewhat internal, but exported.
- repository-information repository-root open-repository*
+ repository-information repository-root repository-base open-repository*
  repository-magic +repository-version+
  repository-id-cache set-repository-id-cache!
  path->keys keys->pathname field-filename keys+field->pathname key->id

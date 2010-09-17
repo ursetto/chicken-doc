@@ -110,10 +110,7 @@
 (when (null? (command-line-arguments))
   (usage))
 
-(unless (verify-repository)
-  (fprintf (current-error-port) "No repository found at ~a\n"
-           (repository-base))
-  (exit 1))
+(verify-repository)
 
 (wrap-column (determine-wrap-column))
 
