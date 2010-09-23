@@ -14,7 +14,7 @@
 ;; use parameters and preorder traversal; it also does not let
 ;; us obtain the current stylesheet bindings, so we must approximate
 ;; them with a letrec
-(define (make-text-stylesheet doc #!key (wrap 78))
+(define (make-text-stylesheet doc #!key (wrap 78) (warnings #f))
   (define (flatten-frags frags)
     (with-output-to-string (lambda () (SRV:send-reply frags))))
   (define (indent-and-wrap-with-bullet indent wrap prefix items)
@@ -75,6 +75,11 @@
   (define (fill char) (lambda (st) ((cat (make-string (fmt-width st) char)) st)))
   ;(define (fill char) (lambda (st) ((pad-char char (pad/both (fmt-width st))) st)))
   (define (drop-tag . x) '())
+  (define (text-warning . args)
+    (when warnings (apply warning args)))
+  (define (drop-tag-noisily tag . body)
+    (text-warning "dropped" (cons tag body))
+    '())
                            
   (let* ((wrap (and wrap (not (zero? wrap)) (max wrap 0)))
          (list-indent (make-parameter 2))
@@ -82,7 +87,7 @@
     (letrec
         ((default-elts
           `((*text* . ,(lambda (tag text) text))
-            (*default* . ,(lambda (tag . body) (warning "dropped" (cons tag body)) '()))))
+            (*default* . ,drop-tag-noisily)))
          (inline-elts
           `((b . ,(lambda (tag . body) `("_" ,body "_")))
             (i . ,(lambda (tag . body) `("/" ,body "/")))
@@ -282,9 +287,11 @@
 
       ss)))
 
-(define (write-sxml-as-text doc wrap-col)
+(define (write-sxml-as-text doc wrap-col #!key (warnings #f))
   (SRV:send-reply
    (pre-post-order doc
-                   (make-text-stylesheet doc wrap: wrap-col))))
+                   (make-text-stylesheet doc
+                                         wrap: wrap-col
+                                         warnings: warnings))))
 
 )

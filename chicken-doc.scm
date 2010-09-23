@@ -40,6 +40,7 @@
  decompose-qualified-path
 ;; Parameters
  wrap-column
+ chicken-doc-warnings
  )
 
 (import scheme chicken)
@@ -52,6 +53,8 @@
 
 (define wrap-column
   (make-parameter 76))   ; 0 or #f for no wrapping
+(define chicken-doc-warnings
+  (make-parameter #f))
 
 ;;; Lowlevel
 
@@ -374,7 +377,8 @@
 (define (describe node)
   (cond ((node-sxml node)
          => (lambda (doc)
-              (write-sxml-as-text doc (wrap-column))))
+              (write-sxml-as-text doc (wrap-column)
+                                  warnings: (chicken-doc-warnings))))
         (else
          (error "No such identifier"
                 (sprintf "~a" (node-path node))))))

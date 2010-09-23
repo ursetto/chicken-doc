@@ -113,6 +113,8 @@
 (verify-repository)
 
 (wrap-column (determine-wrap-column))
+(chicken-doc-warnings
+ (get-environment-variable "CHICKEN_DOC_WARNINGS"))
 
 (with-output-to-pager
  (lambda ()
