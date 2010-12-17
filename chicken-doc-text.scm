@@ -179,9 +179,9 @@
                       ))
             (highlight . ,(lambda (tag lang . body)
                             ;; use PRE output for now; ignore LANG
-                            `(#\newline "    " ; dumb
+                            `(#\newline "  " ; dumb
                               ,(string-intersperse (string-split (flatten-frags body) "\n" #t)
-                                                   "\n    ")
+                                                   "\n  ")
                               #\newline ; hmm
                               )
                             ))
