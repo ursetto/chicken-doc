@@ -171,9 +171,9 @@
                              (fmt #f (with-width wrap (wrap-lines str)))
                              (list str #\newline)))))) ; need extra NL if no wrap-lines
             (pre . ,(lambda (tag . body)
-                      `(#\newline "    "  ; dumb
+                      `(#\newline "  "  ; dumb
                         ,(string-intersperse (string-split (flatten-frags body) "\n" #t)
-                                             "\n    ")
+                                             "\n  ")
                         #\newline ; hmm
                         )
                       ))

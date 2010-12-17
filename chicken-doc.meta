@@ -4,7 +4,7 @@
  (category doc-tools)
  (license "BSD")
  (doc-from-wiki)
- (needs matchable
+ (needs matchable regex
         (fmt 0.703) sxml-transforms ; chicken-doc-text
         )
  (files "chicken-doc.scm" "chicken-doc-cmd.scm" "chicken-doc.setup" "chicken-doc.html"))
