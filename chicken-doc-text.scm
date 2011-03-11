@@ -93,7 +93,7 @@
                         (lambda (x) `("_" ,x "_"))))
          (teletypify (if (chicken-doc-ansi-colors)
                         (lambda (x) `("\x1b[4m" ,x "\x1b[0m"))
-                        (lambda (x) `("_" ,x "_"))))
+                        (lambda (x) `("`" ,x "`"))))
          (italicize (if (chicken-doc-ansi-colors)
                         (lambda (x) `("\x1b[4m" ,x "\x1b[0m"))
                         (lambda (x) `("/" ,x "/"))))
