@@ -1,12 +1,15 @@
-(module chicken-doc-text (write-sxml-as-text)
+(module chicken-doc-text (write-sxml-as-text
+                          chicken-doc-ansi-colors)
 
 (import scheme chicken)
-(use fmt)
+(use fmt fmt-unicode)
 (use sxml-transforms)
 (use matchable)
 (use data-structures srfi-13 ports)
 (require-library srfi-1)
 (import (only srfi-1 filter-map reduce make-list))
+
+(define chicken-doc-ansi-colors (make-parameter #f))
 
 (define walk pre-post-order)
 
@@ -33,8 +36,9 @@
            ((line1 . rest)
             `(,(fmt #f (with-width
                         wrap
-                        (columnar (string-length prefix) (dsp prefix)
-                                  (wrap-lines line1))))
+                        (fmt-unicode
+                         (columnar (string-length prefix) (dsp prefix)
+                                   (wrap-lines line1)))))
               ,rest))))))
   (define (extract-dl-items dl)  ; returns ( (term . defs) ...)
     (let loop ((dl dl)
@@ -83,15 +87,27 @@
                            
   (let* ((wrap (and wrap (not (zero? wrap)) (max wrap 0)))
          (list-indent (make-parameter 2))
-         (hr-glyph (if wrap (make-string wrap #\-) "--------")))
+         (hr-glyph (if wrap (make-string wrap #\-) "--------"))
+         (underline (if (chicken-doc-ansi-colors)
+                        (lambda (x) `("\x1b[4m" ,x "\x1b[0m"))
+                        (lambda (x) `("_" ,x "_"))))
+         (teletypify (if (chicken-doc-ansi-colors)
+                        (lambda (x) `("\x1b[4m" ,x "\x1b[0m"))
+                        (lambda (x) `("_" ,x "_"))))
+         (italicize (if (chicken-doc-ansi-colors)
+                        (lambda (x) `("\x1b[4m" ,x "\x1b[0m"))
+                        (lambda (x) `("/" ,x "/"))))
+         (embolden (if (chicken-doc-ansi-colors)
+                       (lambda (x) `("\x1b[1m" ,x "\x1b[0m"))
+                       (lambda (x) `("*" ,x "*")))))
     (letrec
         ((default-elts
           `((*text* . ,(lambda (tag text) text))
             (*default* . ,drop-tag-noisily)))
          (inline-elts
-          `((b . ,(lambda (tag . body) `("_" ,body "_")))
-            (i . ,(lambda (tag . body) `("/" ,body "/")))
-            (tt . ,(lambda (tag . body) `("`" ,body "`")))
+          `((b . ,(lambda (tag . body) (embolden body)))
+            (i . ,(lambda (tag . body) (italicize body)))
+            (tt . ,(lambda (tag . body) (teletypify body)))
             (sub . ,(lambda (tag . body) body))
             (sup . ,(lambda (tag . body) body))
             (big . ,(lambda (tag . body) body))
@@ -101,10 +117,18 @@
                        (if desc
                            `(,desc #\space #\( ,href #\))
                            href)))
+            ;; Internal hyperlinks aren't very useful, so just show the description when available.
+            ;; However, if the described href is a fragment not matching the description,
+            ;; print both.
             (int-link . ,(lambda (tag href #!optional (desc #f))
-                           (or desc
-                               href ;; `(#\[ ,href #\])
-                               )))))
+                           (if (and desc (not (equal? desc "")))     ;; equal? here b/c desc may be fragments; don't flatten for now
+                               (if (char=? (string-ref href 0) #\#)
+                                   (let ((hre (substring href 1)))
+                                     (if (equal? desc hre)
+                                         (underline desc)
+                                         `(,desc #\space #\( ,(underline hre) #\))))
+                                   (underline desc))
+                               (underline href))))))
          (block-elts
           `((section . ,(lambda (tag level name . body)
                           `(#\newline
@@ -168,7 +192,7 @@
                     (let ((str (flatten-frags body)))  ; FIXME remove if no wrap
                       `(#\newline
                         ,(if wrap
-                             (fmt #f (with-width wrap (wrap-lines str)))
+                             (fmt #f (with-width wrap (fmt-unicode (wrap-lines str))))
                              (list str #\newline)))))) ; need extra NL if no wrap-lines
             (pre . ,(lambda (tag . body)
                       `(#\newline "  "  ; dumb
@@ -234,11 +258,12 @@
                                    sep
                                    (fmt #f (with-width
                                             wrap
-                                            (apply columnar
-                                                   `(" | "
-                                                     ,@(intersperse
-                                                        (map wrap-lines row) " | ")
-                                                     " |")))))))
+                                            (fmt-unicode
+                                             (apply columnar
+                                                    `(" | "
+                                                      ,@(intersperse
+                                                         (map wrap-lines row) " | ")
+                                                      " |"))))))))
                               rows)
                          sep))))
 
@@ -247,7 +272,7 @@
                   (let ((str (flatten-frags body)))
                     `(#\newline
                       ,(if wrap
-                           (fmt #f (with-width wrap (columnar "  > " (wrap-lines str))))
+                           (fmt #f (with-width wrap (fmt-unicode (columnar "  > " (wrap-lines str)))))
                            (list "  > " str #\newline))))))
 
             ;; (examples (example (expr ...) (result ...)) ...) => (pre ...)

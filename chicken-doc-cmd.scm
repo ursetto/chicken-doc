@@ -1,5 +1,5 @@
 (require-library chicken-doc)
-(import chicken-doc)
+(import chicken-doc (only chicken-doc-text chicken-doc-ansi-colors))
 (require-library posix)
 (import (only posix with-output-to-pipe setenv))
 (use regex) (import irregex)
@@ -92,6 +92,16 @@
                76       ; (* 80 0.95)
                (inexact->exact (truncate (* cols 0.95))))))))
 
+;;; Colors
+
+;; Called prior to setting up pager so terminal-port? does not take it into account;
+;; if env var set, we assume your pager supports ANSI escape sequences as in less -R.
+(define (ansi-colors?)
+  (and (get-environment-variable "CHICKEN_DOC_COLORS")
+       (terminal-port? (current-output-port))
+       (let ((term (get-environment-variable "TERM")))
+         (and term (not (equal? term "dumb"))))))       ;; emacs==dumb
+
 ;;; Helpers
 
 ;; Special lookup for command-line.  Treat args as a standard path list
@@ -113,6 +123,7 @@
 (verify-repository)
 
 (wrap-column (determine-wrap-column))
+(chicken-doc-ansi-colors (ansi-colors?))
 (chicken-doc-warnings
  (get-environment-variable "CHICKEN_DOC_WARNINGS"))
 
