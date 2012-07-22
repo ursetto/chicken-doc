@@ -7,4 +7,4 @@
  (needs matchable regex
         (fmt 0.706) sxml-transforms ; chicken-doc-text
         )
- (files "chicken-doc.scm" "chicken-doc-cmd.scm" "chicken-doc.setup" "chicken-doc.html"))
+ )
