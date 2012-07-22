@@ -499,15 +499,24 @@
 ;;; ID search
 
 ;; Returns list of nodes matching identifier ID.
-;; ID may be a symbol or string.
-(define (match-nodes/id id)
+;; ID may be a symbol or string.  LIMIT is an integer
+;; indicating the maximum number of results to return,
+;; or #f for no limit.
+(define (match-nodes/id id #!optional limit)
   (define (lookup id)
     (id-cache-ref (current-id-cache) id))
+  (define (take-up-to lim L)
+    (let loop ((i 0) (L L) (acc '()))
+      (if (or (>= i lim) (null? L))
+          (reverse acc)
+          (loop (add1 i) (cdr L) (cons (car L) acc)))))
   (validate-id-cache! (current-repository))
   (let ((id (if (string? id) (string->symbol id) id)))
     (map (lambda (x)
            (lookup-node (append x (list id))))
-         (lookup id))))
+         (if limit
+             (take-up-to limit (lookup id))
+             (lookup id)))))
 
 (define (vector-filter-map f v)
   ;; filter-map vector V to list.  this is here because
