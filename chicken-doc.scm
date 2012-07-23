@@ -704,10 +704,10 @@
 
 ;; Return list of nodes whose identifiers match
 ;; symbol, string or re.
-(define (match-nodes idre)
+(define (match-nodes idre #!optional limit)
   (if (or (irregex? idre) (regexp? idre))
-      (match-nodes/re idre)
-      (match-nodes/id idre)))
+      (match-nodes/re idre limit)
+      (match-nodes/id idre limit)))
 
 (define (search-and-describe id)
   (let ((nodes (match-nodes id)))
