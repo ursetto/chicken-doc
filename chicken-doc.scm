@@ -573,7 +573,7 @@
   (let ((rx (irregex re)))
     (validate-id-cache! (current-repository))
     (append-map/limit
-     (lambda (id lim) (match-nodes/id id lim))
+     (lambda (id lim) (match-nodes/id id (if (< lim 0) #f lim)))
      (vector-filter-map (lambda (i k)   ; was filter-map
                           (and (string-search rx k) k))
                         (id-cache-ids (current-id-cache))
