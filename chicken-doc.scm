@@ -518,18 +518,19 @@
              (take-up-to limit (lookup id))
              (lookup id)))))
 
-(define (vector-filter-map f v)
+(define (vector-filter-map f v #!optional (limit -1))
   ;; filter-map vector V to list.  this is here because
-  ;; we converted the id-cache-ids to a vector.
+  ;; we converted the id-cache-ids to a vector.  If limit is
+  ;; given and non-negative, limits returned results.
   (let ((len (vector-length v)))
-    (let lp ((i 0) (L '()))
-      (if (fx>= i len)
+    (let lp ((i 0) (L '()) (left limit))
+      (if (or (fx>= i len)
+              (= 0 left))
           (reverse L)
-          (lp (fx+ i 1)
-              (cond ((f i (vector-ref v i))
-                     => (lambda (x) (cons x L)))
-                    (else
-                     L)))))))
+          (let ((x (f i (vector-ref v i))))
+            (if x
+                (lp (fx+ i 1) (cons x L) (fx- left 1))
+                (lp (fx+ i 1) L left)))))))
 (define (vector-copy v #!optional (start 0) (end (vector-length v)) (fill (void)))
   ;; SRFI-43 vector-copy.  Why is vector-lib's implementation so verbose?
   (let ((len (vector-length v)))
@@ -557,15 +558,18 @@
                                      (and (string-search rx k) k))
                                    (id-cache-ids (current-id-cache))))))
 
-;; Match against full node paths with RE.
-(define (match-node-paths/re re)
+;; Match against full node paths with RE.  Optional LIMIT is
+;; an integer indicating maximum number of results to
+;; return, or #f for unlimited.
+(define (match-node-paths/re re #!optional limit)
   (let ((rx (irregex re)))
     (validate-id-cache! (current-repository))
     (map (lambda (path)
            (lookup-node (string-split path))) ; stupid resplit
          (vector-filter-map (lambda (i k)
                               (and (string-search rx k) k))
-                            (id-cache-paths (current-id-cache))))))
+                            (id-cache-paths (current-id-cache))
+                            (if limit limit -1)))))
 
 ;; Search for "nearest" VAL in vector V at start or end of a range.
 ;; START? is a boolean indicating whether this is the start or end of
