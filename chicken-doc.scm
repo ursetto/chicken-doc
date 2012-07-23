@@ -546,17 +546,41 @@
                  (loop (+ vi 1) (+ ci 1)))
                 (else c)))))))
 
+;; Like append-map, but caps returned list length at LIM, an integer.
+;; Negative LIM means unlimited.
+;; Note this algorithm is iterative (in both the inner and outer loop)
+;; unlike SRFI 1 append-map.
+(define (append-map/limit f L lim)
+  (let loop ((lim lim) (R '()) (L L))
+    (if (or (null? L)
+            (= lim 0))
+        (reverse R)
+        (let inner ((lim lim)
+                    (R R)
+                    (M (f (car L))))
+          (if (or (null? M)
+                  (= lim 0))
+              (loop lim R (cdr L))
+              (inner (- lim 1)
+                     (cons (car M) R)
+                     (cdr M)))))))
 
-;; Returns list of nodes whose identifiers
-;; match regex RE.
-(define (match-nodes/re re)
+;; Returns list of nodes whose identifiers match regex RE.
+;; Optional LIMIT is an integer indicating maximum number of results to
+;; return, or #f for unlimited.
+(define (match-nodes/re re #!optional limit)
   (let ((rx (irregex re)))
     (validate-id-cache! (current-repository))
-    (append-map (lambda (id)
-                  (match-nodes id))
-                (vector-filter-map (lambda (i k)   ; was filter-map
-                                     (and (string-search rx k) k))
-                                   (id-cache-ids (current-id-cache))))))
+    (append-map/limit
+     (lambda (id) (match-nodes id))
+     (vector-filter-map (lambda (i k)   ; was filter-map
+                          (and (string-search rx k) k))
+                        (id-cache-ids (current-id-cache))
+                        ;; Upper bound on results we need, since match-nodes
+                        ;; will return 1 or more per call.  Thus we do some
+                        ;; regex work here that may be thrown away.
+                        (if limit limit -1))
+     (if limit limit -1))))
 
 ;; Match against full node paths with RE.  Optional LIMIT is
 ;; an integer indicating maximum number of results to
