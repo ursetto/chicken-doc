@@ -547,7 +547,8 @@
                 (else c)))))))
 
 ;; Like append-map, but caps returned list length at LIM, an integer.
-;; Negative LIM means unlimited.
+;; Negative LIM means unlimited.  Also passes the remaining LIM to F
+;; so F may optionally limit its own output to save computation.
 ;; Note this algorithm is iterative (in both the inner and outer loop)
 ;; unlike SRFI 1 append-map.
 (define (append-map/limit f L lim)
@@ -557,7 +558,7 @@
         (reverse R)
         (let inner ((lim lim)
                     (R R)
-                    (M (f (car L))))
+                    (M (f (car L) lim)))
           (if (or (null? M)
                   (= lim 0))
               (loop lim R (cdr L))
@@ -572,7 +573,7 @@
   (let ((rx (irregex re)))
     (validate-id-cache! (current-repository))
     (append-map/limit
-     (lambda (id) (match-nodes id))
+     (lambda (id lim) (match-nodes/id id lim))
      (vector-filter-map (lambda (i k)   ; was filter-map
                           (and (string-search rx k) k))
                         (id-cache-ids (current-id-cache))
