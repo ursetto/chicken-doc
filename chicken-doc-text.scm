@@ -11,7 +11,7 @@
 
 (define chicken-doc-ansi-colors (make-parameter #f))
 
-(define walk pre-post-order)
+(define walk pre-post-order*)
 
 ;; sxml-transforms does not allow us to pass state around so we
 ;; use parameters and preorder traversal; it also does not let
@@ -65,12 +65,12 @@
       (filter-map (match-lambda (('tr . tds)
                             (filter-map
                              (match-lambda (('td . body)
-                                       (flatten-frags (pre-post-order body cell-ss)))
+                                       (flatten-frags (pre-post-order* body cell-ss)))
                                       ;; we don't pass the "th" identity back, so we can't
                                       ;; do further processing, such as centering
                                       (('th . body)
                                        (string-upcase
-                                        (flatten-frags (pre-post-order body cell-ss))))
+                                        (flatten-frags (pre-post-order* body cell-ss))))
                                       (else #f))
                              tds))
                            (else #f))   ; usu. whitespace and (@ ...)
@@ -78,10 +78,10 @@
   ;; special formatter for table top/bottom
   (define (fill char) (lambda (st) ((cat (make-string (fmt-width st) char)) st)))
   ;(define (fill char) (lambda (st) ((pad-char char (pad/both (fmt-width st))) st)))
-  (define (drop-tag . x) '())
+  (define (drop-tag tag body) '())
   (define (text-warning . args)
     (when warnings (apply warning args)))
-  (define (drop-tag-noisily tag . body)
+  (define (drop-tag-noisily tag body)
     (text-warning "dropped" (cons tag body))
     '())
                            
@@ -105,49 +105,55 @@
           `((*text* . ,(lambda (tag text) text))
             (*default* . ,drop-tag-noisily)))
          (inline-elts
-          `((b . ,(lambda (tag . body) (embolden body)))
-            (i . ,(lambda (tag . body) (italicize body)))
-            (tt . ,(lambda (tag . body) (teletypify body)))
-            (sub . ,(lambda (tag . body) body))
-            (sup . ,(lambda (tag . body) body))
-            (big . ,(lambda (tag . body) body))
-            (small . ,(lambda (tag . body) body))
+          `((b . ,(lambda (tag body) (embolden body)))
+            (i . ,(lambda (tag body) (italicize body)))
+            (tt . ,(lambda (tag body) (teletypify body)))
+            (sub . ,(lambda (tag body) body))
+            (sup . ,(lambda (tag body) body))
+            (big . ,(lambda (tag body) body))
+            (small . ,(lambda (tag body) body))
 
-            (link . ,(lambda (tag href #!optional (desc #f))
-                       (if desc
-                           `(,desc #\space #\( ,href #\))
-                           href)))
+            (link . ,(lambda (tag href+desc)
+                       (match href+desc
+                              ((or (href) (href #f))  ;; like #!optional; can probably remove #f
+                               href)
+                              ((href desc)
+                               `(,desc #\space #\( ,href #\))))))
             ;; Internal hyperlinks aren't very useful, so just show the description when available.
             ;; However, if the described href is a fragment not matching the description,
             ;; print both.
-            (int-link . ,(lambda (tag href #!optional (desc #f))
-                           (if (and desc (not (equal? desc "")))     ;; equal? here b/c desc may be fragments; don't flatten for now
-                               (if (char=? (string-ref href 0) #\#)
-                                   (let ((hre (substring href 1)))
-                                     (if (equal? desc hre)
-                                         (underline desc)
-                                         `(,desc #\space #\( ,(underline hre) #\))))
-                                   (underline desc))
-                               (underline href))))))
+            (int-link . ,(lambda (tag href+desc)
+                           (match href+desc
+                                  ((or (href) (href #f) (href ""))
+                                   (underline href))
+                                  ((href desc)
+                                   (if (char=? (string-ref href 0) #\#)
+                                       (let ((hre (substring href 1)))
+                                         (if (equal? desc hre)
+                                             (underline desc)
+                                             `(,desc #\space #\( ,(underline hre) #\))))
+                                       (underline desc))))))))
          (block-elts
-          `((section . ,(lambda (tag level name . body)
-                          `(#\newline
-                            ,(case level
-                               ((2) "==")
-                               ((3) "===")
-                               ((4) "====")
-                               ((5) "=====")
-                               ((6) "======")
-                               (else "======"))
-                            " " ,name #\newline ,body)))
+          `((section . ,(lambda (tag level+name+body)
+                          (match level+name+body
+                                 ((level name . body)
+                                  `(#\newline
+                                    ,(case level
+                                       ((2) "==")
+                                       ((3) "===")
+                                       ((4) "====")
+                                       ((5) "=====")
+                                       ((6) "======")
+                                       (else "======"))
+                                    " " ,name #\newline ,body)))))
             ,@(let ((parse-LIs
                      (lambda (items prefix)
                        (let ((index 0))
                          `(#\newline
-                           ,(pre-post-order
+                           ,(pre-post-order*
                              items
                              `((li *preorder* .
-                                   ,(lambda (tag . items)
+                                   ,(lambda (tag items)
                                       (set! index (+ index 1)) ; grr
                                       (let ((p (prefix index))
                                             (i (list-indent)))
@@ -156,21 +162,21 @@
                                          (parameterize ((list-indent (+ i (string-length p))))
                                            ;; NB the transformer won't correctly handle
                                            ;; block elements other than nested lists
-                                           (pre-post-order items ss)))))))))))))
+                                           (pre-post-order* items ss)))))))))))))
                 `((ul *preorder* .
-                      ,(lambda (tag . items)
+                      ,(lambda (tag items)
                          (parse-LIs items (lambda (i) "* "))))
                   (ol *preorder* .
-                      ,(lambda (tag . items)
+                      ,(lambda (tag items)
                          (parse-LIs items (lambda (i) (string-append
                                                  (number->string i) ". ")))))))
 
             (dl *preorder* .
-                ,(lambda (tag . items)
+                ,(lambda (tag items)
                    `(#\newline
                      ,(map (match-lambda
                             ((term . defs)
-                             (let* ((term (flatten-frags (pre-post-order term inline-ss)))
+                             (let* ((term (flatten-frags (pre-post-order* term inline-ss)))
                                     (bullet (string-append "- " term ": ")))
                                ;; Indent the term's description to align with the term.
                                ;; If this indent exceeds 25% of the output width, just
@@ -181,37 +187,39 @@
                                      (indent-and-wrap-with-bullet
                                       (list-indent) wrap "- "
                                       (cons (string-append term ": ")
-                                            (pre-post-order defs inline-ss)))
+                                            (pre-post-order* defs inline-ss)))
                                      (indent-and-wrap-with-bullet
                                       (list-indent) wrap bullet
                                       ;; FIXME: multiple defs should be displayed separately
-                                      (pre-post-order defs inline-ss)))))))
+                                      (pre-post-order* defs inline-ss)))))))
                            (extract-dl-items items)))))
             
-            (p . ,(lambda (tag . body)
+            (p . ,(lambda (tag body)
                     (let ((str (flatten-frags body)))  ; FIXME remove if no wrap
                       `(#\newline
                         ,(if wrap
                              (fmt #f (with-width wrap (fmt-unicode (wrap-lines str))))
                              (list str #\newline)))))) ; need extra NL if no wrap-lines
-            (pre . ,(lambda (tag . body)
+            (pre . ,(lambda (tag body)
                       `(#\newline "  "  ; dumb
                         ,(string-intersperse (string-split (flatten-frags body) "\n" #t)
                                              "\n  ")
                         #\newline ; hmm
                         )
                       ))
-            (highlight . ,(lambda (tag lang . body)
-                            ;; use PRE output for now; ignore LANG
-                            `(#\newline "  " ; dumb
-                              ,(string-intersperse (string-split (flatten-frags body) "\n" #t)
-                                                   "\n  ")
-                              #\newline ; hmm
-                              )
+            (highlight . ,(lambda (tag lang+body)
+                            (match lang+body
+                                   ((lang . body)
+                                    ;; use PRE output for now; ignore LANG
+                                    `(#\newline "  " ; dumb
+                                      ,(string-intersperse (string-split (flatten-frags body) "\n" #t)
+                                                           "\n  ")
+                                      #\newline ; hmm
+                                      )))
                             ))
 
             (def ((sig *preorder*
-                       . ,(lambda (tag . sigs)
+                       . ,(lambda (tag sigs)
                             (list (map (lambda (s)
                                          (match s
                                                 ((type sig . alist)
@@ -220,18 +228,18 @@
                                                    ,(walk sig inline-ss)))))
                                        sigs)
                                   #\newline))))
-                 . ,(lambda (tag . body) body))
+                 . ,(lambda (tag body) body))
 
             
             (hr .
-                ,(lambda (tag)
+                ,(lambda (tag body)
                    `(#\newline ,hr-glyph #\newline)))
 
             ;; (fmt #f (columnar "| " (wrap-lines col1) " | " (wrap-lines col2)
             ;;                   " | " (wrap-lines col3) " |"))
             
             (table *preorder* .
-                   ,(lambda (tag . elts)
+                   ,(lambda (tag elts)
                       ;; Using columnar essentially requires that wrapping is enabled,
                       ;; so if not, set it to 76 just for tables. *FIXME*
                       (let* ((wrap (if (or (not wrap) (zero? wrap)) 76 wrap))
@@ -268,7 +276,7 @@
                          sep))))
 
             (blockquote
-             . ,(lambda (tag . body)
+             . ,(lambda (tag body)
                   (let ((str (flatten-frags body)))
                     `(#\newline
                       ,(if wrap
@@ -279,23 +287,23 @@
             ;; Some extraneous NLs are deleted, not all; newline output is crappy
             ;; (init ...) clause ignored
             (examples *preorder*
-                      . ,(lambda (tag . body)
-                           (pre-post-order
+                      . ,(lambda (tag body)
+                           (pre-post-order*
                             body
                             `((example *preorder*
-                                       . ,(lambda (tag . body)
-                                            (pre-post-order
+                                       . ,(lambda (tag body)
+                                            (pre-post-order*
                                              `(pre .
-                                                   ,(pre-post-order
+                                                   ,(pre-post-order*
                                                      body
                                                      `((init *preorder*
-                                                             . ,(lambda (tag . body)
+                                                             . ,(lambda (tag body)
                                                                   `(,body #\newline)))
                                                        (expr *preorder*
-                                                             . ,(lambda (tag . body)
+                                                             . ,(lambda (tag body)
                                                                   body))
                                                        (result *preorder*
-                                                               . ,(lambda (tag . body)
+                                                               . ,(lambda (tag body)
                                                                     `("\n; Result: " ,body)))
                                                        (*default* . ,drop-tag))))
                                              ss)))
@@ -314,9 +322,9 @@
 
 (define (write-sxml-as-text doc wrap-col #!key (warnings #f))
   (SRV:send-reply
-   (pre-post-order doc
-                   (make-text-stylesheet doc
-                                         wrap: wrap-col
-                                         warnings: warnings))))
+   (pre-post-order* doc
+                    (make-text-stylesheet doc
+                                          wrap: wrap-col
+                                          warnings: warnings))))
 
 )
