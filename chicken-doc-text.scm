@@ -101,7 +101,9 @@
                        (lambda (x) `("\x1b[1m" ,x "\x1b[0m"))
                        (lambda (x) `("*" ,x "*")))))
     (letrec
-        ((default-elts
+        ((ss #f)
+         (inline-ss #f)
+         (default-elts
           `((*text* . ,(lambda (tag text) text))
             (*default* . ,drop-tag-noisily)))
          (inline-elts
@@ -310,13 +312,16 @@
                               (*default* . ,drop-tag)))))
             
             (tags *preorder* . ,drop-tag)
-            (toc *preorder* . ,drop-tag)))
+            (toc *preorder* . ,drop-tag))))
 
-         (ss `(,@block-elts
-               ,@inline-elts
-               ,@default-elts))
-         (inline-ss `(,@inline-elts
-                      ,@default-elts)))
+      ;; This rigamarole is needed because we relied on letrec acting like letrec*,
+      ;; but CHICKEN 4.8.3 made letrec standard-compliant.  Since we can't rely on
+      ;; letrec* in earlier versions, we hack it this way.
+      (set! ss `(,@block-elts
+                 ,@inline-elts
+                 ,@default-elts))
+      (set! inline-ss `(,@inline-elts
+                        ,@default-elts))
 
       ss)))
 
