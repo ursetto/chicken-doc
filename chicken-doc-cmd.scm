@@ -127,26 +127,33 @@
 (chicken-doc-warnings
  (get-environment-variable "CHICKEN_DOC_WARNINGS"))
 
-(with-output-to-pager
- (lambda ()
-   (let ((o (car (command-line-arguments))))
-     (cond ((string=? o "-s")
-            (describe-signatures (list (lookup (cdr (command-line-arguments))))))
-           ((string=? o "-f")
-            ;; Is this useful?  Identifier search ("find") on signatures, showing path.
-            ;; I wonder if we need the signature, or just the path.
-            (search-only (cadr (command-line-arguments))))
-           ((string=? o "-m")
-            ;; Not doing search-and-describe because when there are zero
-            ;; matches, that will throw an error
-            (search-only (irregex (cadr (command-line-arguments)))))
-           ((string=? o "-c")
-            (describe-contents (lookup (cdr (command-line-arguments)))))
-           ((string=? o "-i")
-            ;; FIXME: decompose-pathspec required here but won't work yet.
-            (describe (lookup (cdr (command-line-arguments)))))
-           (else
-            (let ((ids (command-line-arguments)))
-              (if (null? (cdr ids))
-                  (doc-dwim (car ids))
-                  (doc-dwim ids))))))))
+(let ((o (car (command-line-arguments))))
+  (cond ((null? o)
+         (usage))
+        ((or (string=? o "-h")
+             (string=? o "--help")
+             (string=? o "-?"))
+         (usage))
+        (else
+         (with-output-to-pager
+          (lambda ()
+            (cond ((string=? o "-s")
+                   (describe-signatures (list (lookup (cdr (command-line-arguments))))))
+                  ((string=? o "-f")
+                   ;; Is this useful?  Identifier search ("find") on signatures, showing path.
+                   ;; I wonder if we need the signature, or just the path.
+                   (search-only (cadr (command-line-arguments))))
+                  ((string=? o "-m")
+                   ;; Not doing search-and-describe because when there are zero
+                   ;; matches, that will throw an error
+                   (search-only (irregex (cadr (command-line-arguments)))))
+                  ((string=? o "-c")
+                   (describe-contents (lookup (cdr (command-line-arguments)))))
+                  ((string=? o "-i")
+                   ;; FIXME: decompose-pathspec required here but won't work yet.
+                   (describe (lookup (cdr (command-line-arguments)))))
+                  (else
+                   (let ((ids (command-line-arguments)))
+                     (if (null? (cdr ids))
+                         (doc-dwim (car ids))
+                         (doc-dwim ids))))))))))
