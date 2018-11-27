@@ -1,2 +1,6 @@
-cdoc.txt
-retag.pl
+*.import.scm
+*.so
+\#*
+*~
+
+chicken-doc

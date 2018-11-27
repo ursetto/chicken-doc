@@ -1,0 +1,240 @@
+** todo
+
+ (v) Include tag signature in body text?  Can reconstruct it if it's one sig only,
+     but if multiple correspond, cannot reconstruct all.
+
+ (v) Fix inconsistent path/id/key arguments to API
+
+ (v) Import wiki text to containers
+
+ (v) chicken-doc > 1 arg with no comand should default to exact identifier search
+
+    ,doc should be changed as follows:
+(v)  1) ,doc should allow exact search via (9p open/rdonly)
+	1) is addressed by
+	   ,doc abc      -> search-and-describe
+	   ,doc ()       -> describe
+	   ,doc (abc)    -> describe
+	   ,doc (abc def) -> describe
+	   ,doc abc#def   -> describe
+     2) ,doc posix should default to posix contents -- man page from REPL isn't that useful -- different
+        from command-line behavior
+        2) is harder.  We'd have to check if there are contents, and if there are, list them
+           in preference to showing the manpage.
+
+ Allow import of core unit (chicken) procedures from various pages while
+  probably preserving original wiki text for each page along with metadata; possibly generating
+  a main page for "chicken" describing the page contents.  Would be nice to
+  do this automatically, e.g. create a wiki page for "chicken" pointing to subpages (??)
+  (v) Instead, for subpages, we are placing them in their own namespace
+
+(v) Configurable wiki input location,
+(v) and database output location
+(v) and repository location
+
+(v) Invalidate and regenerate ID index on demand
+  Fine for single searches from command-line.  From REPL, we cannot delete/regen the
+   index on disk every time one key is added.  During large processing, search DB should
+   be locked so we do not try to regen the index mid-process (would not be a problem if
+   indexing were individual and fast).  
+  We can delete the index whenever a key is added or modified, and regen it upon
+   lookup (search).  Then we have these issues:
+   1) If the file is missing, two processes may attempt to regenerate it on lookup.
+      a) If one process opens it O_CREATE|O_EXCL, only it can generate it (file presence
+         prevents regen).  However, no process can know when the regen is complete
+         (size > 0 may indicate partial write).
+      b) It's advisable to move the entire file into place anyway, to be atomic in
+         cash of crash during regen.
+      c) Adding keys is not atomic anyway.  Corruption or inconsistent lookup results
+         could occur anyway.  Main workaround would be to rename the key directory
+         before delete or after add.  However, that doesn't work if the key
+         directory already exists.
+  2) This won't really work.  It works for single lookup and exit.  But for a process
+     such as the REPL, the index may be removed and regenerated externally, which
+     will not be detected.  You'd have to record and check the mtime on the index file
+     to detect an update (granularity, 1 second).
+
+
+(v) Command-line utilities
+
+(v) Autoconvert checked out SVN copy into wiki
+
+ Package parsed documentation copy into an egg (chicken-doc-data)
+
+** known issues
+
+phricken shows "(logger)" "(path->entry)" as IDs due to this:
+    <parameter>logger</parameter>
+    <procedure>((logger) type req . msg)</procedure>
+ Presumably the latter should be removed to the tag body, outside <procedure> tags
+
+intarweb/make-request is oddly formatted -- <procedure> in a list -- it should be reorganized
+
+Markup conversion could be improved
+
+No way to handle eggs containing multiple modules (all placed in same namespace)
+
+** cleaning up existing wiki
+
+Find existing occurrences of [tag] (signature ...) and collapse into tag names:
+ perl -ne 'if (/^ \[(.*?)]/) { print $1,"\n" } ' * |sort|uniq
+
+In man pages we find:
+    declaration specifier    -> leave alone for now
+    extension property       -> leave alone for now
+    import specifier         -> leave alone for now
+    module                   -> leave alone for now
+    parameter                -> change
+    procedure                -> change
+    setter                   -> leave alone for now
+    syntax                   -> change to macro
+
+~/scheme/chicken-wiki/man/4$ 
+  for i in [A-Z]*; do perl -i -n ~/scheme/cdoc/retag.pl procedure procedure "$i"; done
+  for i in [A-Z]*; do perl -i -n ~/scheme/cdoc/retag.pl syntax macro "$i"; done
+  for i in [A-Z]*; do perl -i -n ~/scheme/cdoc/retag.pl parameter parameter "$i"; done
+
+*** duplicate keys
+
+POSIX unit has multiple entries for the same key
+    <procedure>(process COMMANDLINE)</procedure>
+    <procedure>(process COMMAND ARGUMENT-LIST [ENVIRONMENT-LIST])</procedure>
+ Either forbid this (and consolidate) or add it as a secondary signature (leaning toward forbid)
+
+Same for Non-standard macros and special forms, e.g.
+  <macro>(define-external [QUALIFIERS] (NAME (ARGUMENTTYPE1 VARIABLE1) ...) RETURNTYPE BODY ...)</macro><br>
+  <macro>(define-external NAME TYPE [INIT])</macro>
+
+- If we include the signatures in the body text as encountered, the signatures will
+  all be present there and the key can still be looked up; but only the last signature
+  will be stored in the meta file
+
+** possible output
+
+#;> (doc 'host-information)
+
+Path: hostinfo#host-information
+
+(host-information HOST)
+
+Look up and return a hostinfo record, or {{#f}}. {{HOST}} is a string
+hostname, a string numeric IP address, or a {{u8vector}} IP address.
+
+
+/#sys/call-with-cthulhu -> ##sys#call-with-cthulhu ?  i.e. ## acts as escaped # so
+##sys is in the #sys namespace -- only relevant if we actually documented that
+
+
+
+** svnwiki syntax abuse
+
+1. Paragraphs end on blank line, bullet point (*), section (=), EOF,
+   pre (leading whitespace), ...
+2. ''...'', {{...}} may span linebreaks, but not paragraphs; they are inserted
+   verbatim if no closing match
+2. {{..}} do not nest and match left to right
+   therefore, {{code and more {{code}} okay}}. -> "<tt>code and more {{code</tt> okay}}"
+2. {{ and '' nest but must match within the nest.
+     {{code and ''ital}} mismatched'' okay ->
+     "<tt>code and ''ital</tt> mismatched'' okay"
+3. <procedure> may appear within a paragraph
+4. lists are terminated with blank line or section (=).  leading whitespace (pre) has
+   no termination effect
+
+=== hi there
+
+This is a {{test of me}}.
+This is a {{test of
+e}}.
+This is a ''test of me''.
+This is a ''test of
+e''.
+
+Hi.  This is a ''test of
+
+Hi.  This is ''not.
+
+Hi.  This ''is''.
+
+Hi.  This is ''bold and'' not ''bold.
+
+Hi.  This is {{code and more {{code}} okay}}.
+
+Hi.  This is {{code and more {{code}} okay.
+
+Hi.  This is {{code and ''ital'' okay}}.
+
+Hi.  This is {{code and ''ital}} mismatched'' okay.
+
+Hi.  This is {{code and ''ital}} and'' ital again''.
+
+Paragraph.
+=== new section
+
+Hi.  This is
+<procedure>a new procedure</procedure>
+okay.
+
+Hi.  This is a mid-sentence * bullet point.
+
+Hi.  This is a
+ * mid paragraph
+bullet point.
+
+Hi.  This is a
+ * mid paragraph
+bullet point with a space prepended, which turns into "pre".
+** integration with interpreter
+
+(toplevel-command 'desc (lambda () (describe (read)))
+ ",desc ID          Describe identifier ID using chicken-doc")
+
+** paths
+
+Stuff in module "chicken", such as contained in the page "Locations",
+and "Non-standard macros and special forms"
+seems suited for path chicken#... .  However, we don't really have
+anywhere to put the full page text, then.
+
+** tokyocabinet
+
+Can produce static tchmgr binary (300k) via:
+gcc -o tchmgr -O2 -D_MYNOZLIB -D_MYNOBZIP -std=c99 myconf.c tchmgr.c tchdb.c tcutil.c md5.c -I.
+
+Can convert hash table index to tokyocabinet db (slowly) via:
+csi4 -p '(for-each (lambda (x) (system (sprintf "./tchmgr put /tmp/abc \"~a\" \"~a\"" (car x) (cdr x)))) (with-input-from-file "~/tmp/cdoc/id.idx" read))'
+
+** r5rs conversion
+
+Obtain chapter 4 and chapter 6 formatting them to 72 columns:
+$ w3m -cols 72 -dump http://www.schemers.org/Documents/Standards/R5RS/HTML/r5rs-Z-H-7.html > c4.txt
+$ w3m -cols 72 -dump http://www.schemers.org/Documents/Standards/R5RS/HTML/r5rs-Z-H-9.html > c6.txt
+
+Print out names of procedure, syntax, etc. tags so we can figure out what to substitute:
+$ perl -ne 'print $1,"\n" if /^([a-z]\w+):  / || /^([a-z]\w+ \w+):  / ' c4.txt c6.txt|sort -u
+ library procedure
+ library syntax
+ optional procedure
+ procedure
+ syntax
+
+Convert these tags to svnwiki-style tags:
+perl -i.bak -pe 's%^(?:library |optional )?procedure:  (.+?)[ \t]*$%<procedure>\1</procedure><br>%' c4.txt c6.txt
+perl -i.bak -pe 's%^(?:library |optional )?syntax:  (.+?)[ \t]*$%<macro>\1</macro><br>%' c4.txt c6.txt
+
+Convert 4.1 and 4.1.1 headers to section headers:
+perl -i.bak -pe 's/^\d+\.\d+  /=== /' c4.txt c6.txt
+perl -i.bak -pe 's/^\d+\.\d+\.\d+  /==== /' c4.txt c6.txt
+
+Convert UTF8 list bullets to svnwiki readable:
+perl -i.2 -pe 's/  • /*   /' c4.txt c6.txt
+
+Convert `` and '' into ":
+perl -i.3 -pe 's/\047\047|\140\140/"/g' c4.txt c6.txt
+
+(setq indent-tabs-mode nil)
+Fix Chapter 4 do macro by hand
+Convert Chapter headers by hand
+Delete nav header/footer
+Indent all PRE sections by 1 space by hand
+Some math equations have images (search for [r5rs-Z-G-D])
