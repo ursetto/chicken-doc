@@ -1,8 +1,27 @@
-(require-library chicken-doc)
-(import chicken-doc (only chicken-doc-text chicken-doc-ansi-colors))
-(require-library posix)
-(import (only posix with-output-to-pipe setenv))
-(use regex) (import irregex)
+(module chicken-doc-cmd (main)
+
+(import scheme)
+
+(cond-expand
+ ;; FIXME: Test with Chicken 4
+ (chicken-4
+  (require-library chicken-doc)
+  (import chicken-doc (only chicken-doc-text chicken-doc-ansi-colors))
+  (require-library posix)
+  (import (only posix with-output-to-pipe setenv))
+  (use regex) (import irregex))
+ (chicken-5
+  (import (chicken base))
+  (import chicken-doc (only chicken-doc-text chicken-doc-ansi-colors))
+  (import (rename (chicken process-context)
+                  (set-environment-variable! setenv)))  ; c4 compat
+  (import (chicken irregex)
+          (chicken process)
+          (chicken port)
+          (chicken condition)
+          (chicken platform))
+  )
+ )
 
 ;;; Usage
 
@@ -117,43 +136,50 @@
 
 ;;; Main
 
-(when (null? (command-line-arguments))
-  (usage))
+(define (main)
+  (when (null? (command-line-arguments))
+    (usage))
 
-(verify-repository)
+  (verify-repository)
 
-(wrap-column (determine-wrap-column))
-(chicken-doc-ansi-colors (ansi-colors?))
-(chicken-doc-warnings
- (get-environment-variable "CHICKEN_DOC_WARNINGS"))
+  (wrap-column (determine-wrap-column))
+  (chicken-doc-ansi-colors (ansi-colors?))
+  (chicken-doc-warnings
+   (get-environment-variable "CHICKEN_DOC_WARNINGS"))
 
-(let ((o (car (command-line-arguments))))
-  (cond ((null? o)
-         (usage))
-        ((or (string=? o "-h")
-             (string=? o "--help")
-             (string=? o "-?"))
-         (usage))
-        (else
-         (with-output-to-pager
-          (lambda ()
-            (cond ((string=? o "-s")
-                   (describe-signatures (list (lookup (cdr (command-line-arguments))))))
-                  ((string=? o "-f")
-                   ;; Is this useful?  Identifier search ("find") on signatures, showing path.
-                   ;; I wonder if we need the signature, or just the path.
-                   (search-only (cadr (command-line-arguments))))
-                  ((string=? o "-m")
-                   ;; Not doing search-and-describe because when there are zero
-                   ;; matches, that will throw an error
-                   (search-only (irregex (cadr (command-line-arguments)))))
-                  ((string=? o "-c")
-                   (describe-contents (lookup (cdr (command-line-arguments)))))
-                  ((string=? o "-i")
-                   ;; FIXME: decompose-pathspec required here but won't work yet.
-                   (describe (lookup (cdr (command-line-arguments)))))
-                  (else
-                   (let ((ids (command-line-arguments)))
-                     (if (null? (cdr ids))
-                         (doc-dwim (car ids))
-                         (doc-dwim ids))))))))))
+  (let ((o (car (command-line-arguments))))
+    (cond ((null? o)
+           (usage))
+          ((or (string=? o "-h")
+               (string=? o "--help")
+               (string=? o "-?"))
+           (usage))
+          (else
+           (with-output-to-pager
+            (lambda ()
+              (cond ((string=? o "-s")
+                     (describe-signatures (list (lookup (cdr (command-line-arguments))))))
+                    ((string=? o "-f")
+                     ;; Is this useful?  Identifier search ("find") on signatures, showing path.
+                     ;; I wonder if we need the signature, or just the path.
+                     (search-only (cadr (command-line-arguments))))
+                    ((string=? o "-m")
+                     ;; Not doing search-and-describe because when there are zero
+                     ;; matches, that will throw an error
+                     (search-only (irregex (cadr (command-line-arguments)))))
+                    ((string=? o "-c")
+                     (describe-contents (lookup (cdr (command-line-arguments)))))
+                    ((string=? o "-i")
+                     ;; FIXME: decompose-pathspec required here but won't work yet.
+                     (describe (lookup (cdr (command-line-arguments)))))
+                    (else
+                     (let ((ids (command-line-arguments)))
+                       (if (null? (cdr ids))
+                           (doc-dwim (car ids))
+                           (doc-dwim ids)))))))))))
+
+
+)
+
+(import chicken-doc-cmd)
+(main)

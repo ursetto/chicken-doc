@@ -2,5 +2,9 @@
 *.so
 \#*
 *~
+*.build.sh
+*.install.sh
+*.link
 
 chicken-doc
+chicken-doc-cmd

@@ -43,11 +43,38 @@
  chicken-doc-warnings
  )
 
-(import scheme chicken)
-(use matchable regex srfi-13 posix data-structures srfi-69 extras files utils srfi-1)
-(import irregex)
-(import (only csi toplevel-command))
-(import chicken-doc-text)
+(import scheme)
+(cond-expand
+  (chicken-4
+   (import chicken)
+   (use matchable regex srfi-13 posix data-structures srfi-69 extras files utils srfi-1)
+   (import irregex)
+   (import (only csi toplevel-command))
+   (import chicken-doc-text))
+  (else
+   (import (chicken base))
+   (import (chicken irregex))
+   (import (chicken fixnum))
+   (import (chicken pathname))
+   (import (chicken string))
+   (import (chicken sort))
+   (import (chicken condition))
+   (import (chicken format))
+   (import (chicken file) (chicken file posix))
+   (import (only (chicken platform) chicken-home feature?))
+   (import (only (chicken gc) set-finalizer!))
+   (import (only (chicken io) read-line))
+   (import (rename (only (chicken io) read-list)
+                   (read-list read-file)))  ;; chicken 4 compat
+   (import (only (chicken process-context) get-environment-variable))
+   (import srfi-1)
+   (import srfi-13)
+   (import srfi-69)
+   (import matchable)
+   (import chicken-doc-text)
+   (import (only regex regexp? string-search)) ;; TODO: Drop this
+   )
+)
 
 ;;; Config
 
@@ -836,7 +863,14 @@
 (when (feature? 'csi)
   ;; Warning -- will execute if called from a script.
   ;; We really only want this to execute at the REPL.
+
   (verify-repository)
+
+  (cond-expand
+   (chicken-5
+    ;; Only link this extension in when available. 
+    ;; Need to test on Chicken 4.
+    (import (only (chicken csi) toplevel-command))))
   
   (toplevel-command 'wtf (lambda () (repl-wtf (string-trim-both
                                           (read-line))))
