@@ -1,13 +1,27 @@
 (module chicken-doc-text (write-sxml-as-text
                           chicken-doc-ansi-colors)
 
-(import scheme chicken)
-(use fmt fmt-unicode)
-(use sxml-transforms)
-(use matchable)
-(use data-structures srfi-13 ports)
-(require-library srfi-1)
+(import scheme)
 (import (only srfi-1 filter-map reduce make-list))
+
+(cond-expand
+ (chicken-4
+  (import chicken)
+  (use data-structures srfi-13 ports)
+  (require-library srfi-1)
+  (use fmt fmt-unicode)
+  (use sxml-transforms)
+  (use matchable)
+  )
+ (else
+  (import (chicken base))
+  (import (chicken string) srfi-13)
+  (import (chicken port))
+  (import fmt fmt-unicode)
+  (import sxml-transforms)
+  (import matchable)
+  )
+ )
 
 (define chicken-doc-ansi-colors (make-parameter #f))
 

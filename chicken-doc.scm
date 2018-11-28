@@ -43,11 +43,38 @@
  chicken-doc-warnings
  )
 
-(import scheme chicken)
-(use matchable regex srfi-13 posix data-structures srfi-69 extras files utils srfi-1)
-(import irregex)
-(import (only csi toplevel-command))
-(import chicken-doc-text)
+(import scheme)
+(cond-expand
+  (chicken-4
+   (import chicken)
+   (use matchable srfi-13 posix data-structures srfi-69 extras files utils srfi-1)
+   (use irregex)
+   (import (only csi toplevel-command))
+   (import chicken-doc-text))
+  (else
+   (import (chicken base))
+   (import (chicken irregex))
+   (import (chicken fixnum))
+   (import (chicken pathname))
+   (import (chicken string))
+   (import (chicken sort))
+   (import (chicken condition))
+   (import (chicken format))
+   (import (chicken file) (chicken file posix))
+   (import (only (chicken platform) chicken-home feature?))
+   (import (only (chicken gc) set-finalizer!))
+   (import (only (chicken io) read-line))
+   (import (rename (only (chicken io) read-list)
+                   (read-list read-file)))  ;; chicken 4 compat
+   (import (only (chicken process-context) get-environment-variable))
+   (import srfi-1)
+   (import srfi-13)
+   (import srfi-69)
+   (import matchable)
+   (import chicken-doc-text)
+   ;; note: do not import chicken.csi yet
+   )
+)
 
 ;;; Config
 
@@ -575,7 +602,7 @@
     (append-map/limit
      (lambda (id lim) (match-nodes/id id (if (< lim 0) #f lim)))
      (vector-filter-map (lambda (i k)   ; was filter-map
-                          (and (string-search rx k) k))
+                          (and (irregex-search rx k) k))
                         (id-cache-ids (current-id-cache))
                         ;; Upper bound on results we need, since match-nodes
                         ;; will return 1 or more per call.  Thus we do some
@@ -592,7 +619,7 @@
     (map (lambda (path)
            (lookup-node (string-split path))) ; stupid resplit
          (vector-filter-map (lambda (i k)
-                              (and (string-search rx k) k))
+                              (and (irregex-search rx k) k))
                             (id-cache-paths (current-id-cache))
                             (if limit limit -1)))))
 
@@ -705,7 +732,7 @@
 ;; Return list of nodes whose identifiers match
 ;; symbol, string or re.
 (define (match-nodes idre #!optional limit)
-  (if (or (irregex? idre) (regexp? idre))
+  (if (or (irregex? idre))
       (match-nodes/re idre limit)
       (match-nodes/id idre limit)))
 
@@ -836,7 +863,15 @@
 (when (feature? 'csi)
   ;; Warning -- will execute if called from a script.
   ;; We really only want this to execute at the REPL.
+
+  (cond-expand
+   ;; Load csi library at runtime here in Chicken 5 only after we confirm
+   ;; csi is running. Otherwise chicken.csi load fails.
+   (chicken-5 (import (only (chicken csi) toplevel-command)))
+   (else))
+  
   (verify-repository)
+
   
   (toplevel-command 'wtf (lambda () (repl-wtf (string-trim-both
                                           (read-line))))
