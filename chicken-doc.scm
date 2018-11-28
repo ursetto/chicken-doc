@@ -47,8 +47,8 @@
 (cond-expand
   (chicken-4
    (import chicken)
-   (use matchable regex srfi-13 posix data-structures srfi-69 extras files utils srfi-1)
-   (import irregex)
+   (use matchable srfi-13 posix data-structures srfi-69 extras files utils srfi-1)
+   (use irregex)
    (import (only csi toplevel-command))
    (import chicken-doc-text))
   (else
@@ -72,7 +72,6 @@
    (import srfi-69)
    (import matchable)
    (import chicken-doc-text)
-   (import (only regex regexp? string-search)) ;; TODO: Drop this
    ;; note: do not import chicken.csi yet
    )
 )
@@ -603,7 +602,7 @@
     (append-map/limit
      (lambda (id lim) (match-nodes/id id (if (< lim 0) #f lim)))
      (vector-filter-map (lambda (i k)   ; was filter-map
-                          (and (string-search rx k) k))
+                          (and (irregex-search rx k) k))
                         (id-cache-ids (current-id-cache))
                         ;; Upper bound on results we need, since match-nodes
                         ;; will return 1 or more per call.  Thus we do some
@@ -620,7 +619,7 @@
     (map (lambda (path)
            (lookup-node (string-split path))) ; stupid resplit
          (vector-filter-map (lambda (i k)
-                              (and (string-search rx k) k))
+                              (and (irregex-search rx k) k))
                             (id-cache-paths (current-id-cache))
                             (if limit limit -1)))))
 
@@ -733,7 +732,7 @@
 ;; Return list of nodes whose identifiers match
 ;; symbol, string or re.
 (define (match-nodes idre #!optional limit)
-  (if (or (irregex? idre) (regexp? idre))
+  (if (or (irregex? idre))
       (match-nodes/re idre limit)
       (match-nodes/id idre limit)))
 

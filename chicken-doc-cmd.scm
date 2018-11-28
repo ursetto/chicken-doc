@@ -9,7 +9,7 @@
   (import chicken-doc (only chicken-doc-text chicken-doc-ansi-colors))
   (use ports)
   (use posix)
-  (use regex) (import irregex))
+  (use irregex))
  (else
   (import (chicken base))
   (import chicken-doc (only chicken-doc-text chicken-doc-ansi-colors))

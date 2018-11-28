@@ -6,7 +6,6 @@
 (category doc-tools)
 (version "0.4.7")
 (dependencies matchable
-              regex
               fmt  ; fmt >= 0.706, but numbering incompatible in Chicken 5. latest is fine
               sxml-transforms
               srfi-1 srfi-13 srfi-69)
