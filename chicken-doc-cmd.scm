@@ -3,14 +3,14 @@
 (import scheme)
 
 (cond-expand
- ;; FIXME: Test with Chicken 4
  (chicken-4
+  (import chicken)
   (require-library chicken-doc)
   (import chicken-doc (only chicken-doc-text chicken-doc-ansi-colors))
-  (require-library posix)
-  (import (only posix with-output-to-pipe setenv))
+  (use ports)
+  (use posix)
   (use regex) (import irregex))
- (chicken-5
+ (else
   (import (chicken base))
   (import chicken-doc (only chicken-doc-text chicken-doc-ansi-colors))
   (import (rename (chicken process-context)

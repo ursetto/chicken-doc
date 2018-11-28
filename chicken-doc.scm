@@ -73,6 +73,7 @@
    (import matchable)
    (import chicken-doc-text)
    (import (only regex regexp? string-search)) ;; TODO: Drop this
+   ;; note: do not import chicken.csi yet
    )
 )
 
@@ -864,13 +865,14 @@
   ;; Warning -- will execute if called from a script.
   ;; We really only want this to execute at the REPL.
 
+  (cond-expand
+   ;; Load csi library at runtime here in Chicken 5 only after we confirm
+   ;; csi is running. Otherwise chicken.csi load fails.
+   (chicken-5 (import (only (chicken csi) toplevel-command)))
+   (else))
+  
   (verify-repository)
 
-  (cond-expand
-   (chicken-5
-    ;; Only link this extension in when available. 
-    ;; Need to test on Chicken 4.
-    (import (only (chicken csi) toplevel-command))))
   
   (toplevel-command 'wtf (lambda () (repl-wtf (string-trim-both
                                           (read-line))))
