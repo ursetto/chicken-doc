@@ -10,6 +10,7 @@
               sxml-transforms
               srfi-1 srfi-13 srfi-69)
 (components (extension chicken-doc
+                       ;; (csc-options "-O2" "-d2")
                        (source-dependencies "chicken-doc-text.scm")
                        (modules chicken-doc chicken-doc-text))
             (program chicken-doc-cmd
