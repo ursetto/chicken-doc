@@ -496,10 +496,20 @@
       (let ((fn (id-cache-filename c)))
         (call-with-input-file fn
           (lambda (in)
-            (make-id-cache
-             (alist->hash-table (read in) eq?)
-             (file-modification-time (port->fileno in))
-             fn)))))
+            ;; Convert all incoming keys to symbols; they are stored as strings
+            ;; but much code expects symbolic keys. They were formerly stored as symbols (even
+            ;; integers) but this caused r/w invariance issues with read syntax.
+            ;; Values are still stored as lists of symbols, but we stipulate read syntax should
+            ;; never have child nodes.
+            (define (->symbol x)
+              (string->symbol (->string x)))
+            (let ((idx-alist (map (lambda (p)
+                                    (cons (->symbol (car p)) (cdr p)))
+                                  (read in))))
+              (make-id-cache
+               (alist->hash-table idx-alist eq?)
+               (file-modification-time (port->fileno in))
+               fn))))))
     (set-repository-id-cache! r (read-id-cache c)))
 
   ;; We don't currently lock id-cache validations with a mutex.
@@ -766,7 +776,7 @@
 
 ;;; Repository
 
-(define +repository-version+ 3)
+(define +repository-version+ 4)
 
 ;; The repository object is a new concept (formerly all fields
 ;; were global parameters) so our API does not expect a
