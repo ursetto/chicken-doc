@@ -72,7 +72,7 @@
     ((unix) "less")
     (else "")))
 (define (with-output-to-pager thunk)
-  (cond ((get-environment-variable "EMACS")
+  (cond ((get-environment-variable "INSIDE_EMACS")
          (thunk))  ; Don't page in emacs subprocess.
         ((not (terminal-port? (current-output-port)))
          (thunk))  ; Don't page if stdout is not a TTY.
