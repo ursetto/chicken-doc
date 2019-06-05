@@ -1,4 +1,4 @@
-(define version "0.6.0")
+(define version "0.6.1")
 
 (compile -s -O2 -d1 -S chicken-doc.scm -j chicken-doc -j chicken-doc-text)
 (compile -s -O2 -d0 chicken-doc.import.scm)
