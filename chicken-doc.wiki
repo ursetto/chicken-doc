@@ -1,0 +1,598 @@
+[[tags: egg]]
+== chicken-doc
+
+chicken-doc is a tool for exploring Chicken documentation.
+[[toc:]]
+=== Overview
+
+chicken-doc provides facilities to explore Chicken documentation
+from the command-line and from the REPL.  It also provides an
+API to access this documentation from your own programs.
+
+You need to obtain Chicken documentation separately.  To generate a
+documentation database from a copy of the wiki, see the
+[[chicken-doc-admin]] egg.  You can also use a pre-built
+documentation package, described below.
+
+=== Documentation repository
+
+The documentation database is located, by default, under
+{{(chicken-home)}} in the {{chicken-doc/}} directory.  If you have
+installed it in a different location, set the
+{{CHICKEN_DOC_REPOSITORY}} enviroment variable:
+
+ export CHICKEN_DOC_REPOSITORY=/path/to/repository
+
+==== Pre-built packages
+
+Chicken 4 documentation tarballs, built from the {{man/4}} and {{eggref/4}} directories
+in SVN, are provided in
+[[https://3e8.org/pub/chicken-doc/chicken-doc-repo.tgz|gzip]],
+[[https://3e8.org/pub/chicken-doc/chicken-doc-repo.tar.bz2|bzip2]] and
+[[https://3e8.org/pub/chicken-doc/chicken-doc-repo.zip|zip]] format at
+[[https://3e8.org/pub/chicken-doc/]].  They are updated daily from
+the latest wiki documentation.
+
+Chicken 5 documentation tarballs, built from the {{man/5}} and {{eggref/5}} directories 
+in SVN, are provided in
+[[https://3e8.org/pub/chicken-doc/chicken-doc-repo-5.tgz|gzip]],
+[[https://3e8.org/pub/chicken-doc/chicken-doc-repo-5.tar.bz2|bzip2]] and
+[[https://3e8.org/pub/chicken-doc/chicken-doc-repo-5.zip|zip]] format at
+[[https://3e8.org/pub/chicken-doc/]].  They have a {{-5}} in their names to
+distinguish them from the Chicken 4 versions. They are updated daily from
+the latest wiki documentation.
+
+Download your preferred format---either documentation version can be served
+from Chicken 4 or Chicken 5---and extract it into the default location
+{{(chicken-home)}} or into some other writable directory of your choice.  
+
+For example, on Chicken 4, serving Chicken 4 docs:
+
+ $ cd `csi -p '(chicken-home)'`
+ $ curl https://3e8.org/pub/chicken-doc/chicken-doc-repo.tgz | sudo tar zx
+
+And on Chicken 5, serving Chicken 5 docs:
+
+ $ cd `csi -R chicken.platform -p '(chicken-home)'`
+ $ curl https://3e8.org/pub/chicken-doc/chicken-doc-repo-5.tgz | sudo tar zx
+
+The tarball will be extracted into the directory {{./chicken-doc/}}.
+If you installed into a non-default location, {{CHICKEN_DOC_REPOSITORY}}
+must include this entire path.
+
+===== Cleaning up old repository crust
+
+Occasionally, or when the repository format changes significantly, you
+should wipe out your repository before extracting a new one, to get
+rid of dead wood.  Simply delete the directory shown by the
+following command:
+
+ $ csi -R chicken-doc -p "(locate-repository)"
+ /usr/local/share/chicken/chicken-doc
+
+If you have chicken-doc-admin installed, just do instead:
+
+ $ chicken-doc-admin -D
+
+==== Structure
+
+The documentation is arranged in a tree structure, where each node may
+contain descriptive text, a signature, and other nodes.  Nodes may be
+searched for by name or specified by an absolute path through the
+tree, and you may request the text, signature or table of contents
+(children) for any node.
+
+With the standard documentation install, each unit (posix, lolevel)
+and egg (9p, base64) is assigned a toplevel node whose text contains
+that unit or egg's full documentation.  The identifiers in each become
+these nodes' children, and contain the signature and descriptive text
+just for that identifier.  Core bindings in the {{chicken}} module
+are similar, but because they are divided into several manual
+pages, each page is placed in a separate node under the toplevel
+node {{chicken}}.
+
+So in general, if you know the full path of an identifier, you can
+pull it into your program with (use NODE) or (import NODE) where
+NODE is the name of the toplevel node.  For example,
+
+  and-let* -> (chicken macros and-let*) -> (import chicken)
+  find-files -> (posix find-files) -> (use posix)
+
+Here's an abbreviated example of the tree structure:
+
+ |- 9p +- alloc-handle
+ |     |- call-with-input-file
+ |     |- call-with-output-file
+ |
+ |- base64 +- base64-decode
+ |         |- base64-encode
+ |
+ |- chicken +- macros +- and-let*
+ |          |         |- assert
+ |          |
+ |          |- parameters -- make-parameter
+ |
+ |- posix +- find-files
+ |        |- glob
+ |        |- open/rdonly
+ |
+
+
+=== From the command-line
+
+ chicken-doc -s|-c|-i path
+ chicken-doc -f node
+ chicken-doc node | path
+ 
+ -s path        Show signature
+ -c path        Show table of contents (children)
+ -i path        Show documentation
+ -f node        Show all matching paths for node
+
+where NODE is a single identifier and PATH is one or
+more node names comprising a path from the documentation root,
+separated by spaces.
+
+ -m re          Show all matching paths for RE
+
+where RE is a POSIX regular expression.  Similar to -f.
+
+When no option is given, guess the user's intent.  With
+a single node name, find the node (as with -f) and show its
+documentation (as with -i) or show all matching paths
+if multiple matches exist.  If more than one node is
+provided, show documentation on the path (as if called
+with -i).
+
+==== Pager
+
+When output is sent to a terminal, {{chicken-doc}} pipes its output to
+the pager of your choice.  It looks for a pager in the following
+places:
+
+* the CHICKEN_DOC_PAGER environment variable
+* the PAGER environment variable
+* the default pager, which is {{less}} on UNIX and {{more}} on Windows
+
+If an environment variable is set but empty, for example:
+
+ export CHICKEN_DOC_PAGER=
+
+then the output is not paginated.  Windows does not distinguish
+between an empty and unset variable, so you can use the special
+value {{cat}} instead:
+
+ set CHICKEN_DOC_PAGER=cat
+
+==== Text wrapping
+
+{{chicken-doc}} will wrap its output text nicely if it can determine how
+wide your terminal is.  If it can't (e.g. on Windows) it will wrap at
+76 columns.  If you wish to fix the wrap column to, say, 120:
+
+ export CHICKEN_DOC_WRAP=120
+
+or to disable wrapping, which won't look very good:
+
+ export CHICKEN_DOC_WRAP=0
+
+==== Colorization
+
+Alpha-quality feature added in 0.4.3, adding ANSI bold and underline
+support rather than the usual ASCII chars.  The attributes cannot
+currently be configured beyond enabling and disabling colorization.
+
+To enable automatic colorization:
+
+ export CHICKEN_DOC_COLORS=auto      # auto | always | never
+
+{{auto}} enables colorization when output is directed to a
+terminal and your TERM variable is set (to anything other than
+{{dumb}}).  Using {{chicken-doc}}'s pager facility counts as
+a terminal; we assume your pager supports ANSI escape sequences,
+as in {{less -R}}.
+
+{{always}} will colorize unconditionally, and {{never}} turns it off.
+
+If unset or none of these options, it is disabled.
+
+==== Examples
+
+Show matches for identifier {{file-open}}, which occurs in
+Unit posix and in the 9p egg:
+
+ $ chicken-doc -f file-open
+ (9p file-open)        (file-open connection path mode)
+ (posix file-open)     (file-open FILENAME FLAGS [MODE])
+
+Show signature of {{open/rdonly}} in Unit posix:
+
+ $ chicken-doc -s posix open/rdonly
+ (posix open/rdonly)     open/rdonly
+
+Show documentation for {{file-open}} in the 9p egg:
+
+ $ chicken-doc -i 9p open/rdonly
+ procedure: (file-open connection path mode)
+ 
+ Opens the file indicated by `path` on the `connection` with the given
+ `mode` and returns an opaque handle object which you can use for the [...]
+
+Show table of contents (identifiers) in Unit posix:
+
+ $ chicken-doc -c posix
+  [...]
+ get-host-name        (get-host-name)
+ glob                 (glob PATTERN1 ...)
+ group-information    (group-information GROUP)
+  [...]
+
+Show identifiers containing call-:
+
+ $ chicken-doc -m call-
+ (scheme call-with-values)      (call-with-values producer consumer)
+ (xml-rpc call-xml-rpc-proc)    (call-xml-rpc-proc call-sxml procedures)
+ (library get-call-chain)       (get-call-chain [START [THREAD]])
+ [...]
+
+Show identifiers ending in -file:
+
+ $ chicken-doc -m -file$
+ (spiffy access-file)           (access-file [string])
+ (scheme call-with-input-file)  (call-with-input-file string proc)
+ (scheme call-with-output-file) (call-with-output-file string proc)
+ [...]
+
+Show {{with-...-port}} identifiers:
+
+ $ chicken-doc -m with-.+-port
+ (ports with-error-output-to-port)  (with-error-output-to-port PORT THUNK)
+ (ports with-input-from-port)       (with-input-from-port PORT THUNK)
+ (ports with-output-to-port)        (with-output-to-port PORT THUNK)
+
+Show documentation for {{use}} in chicken core:
+
+ $ chicken-doc use
+ path: (chicken macros use)
+ macro: (use ID ...)
+ 
+ `use` is just a shorter alias for `require-extension`.
+
+Show full documentation for Unit posix:
+
+ $ chicken-doc posix
+
+Show matches for {{open/rdonly}}, as with -f:
+
+ $ chicken-doc open/rdonly
+
+Show documentation for {{open/rdonly}} in Unit posix:
+
+ $ chicken-doc posix open/rdonly
+
+
+=== From the REPL
+
+To load {{chicken-doc}} for REPL use:
+
+ (require-library chicken-doc)
+
+The following {{csi}} commands then become available:
+
+ ,doc node
+ ,doc (node ...)
+
+Show documentation for the identifier {{node}} or the absolute
+path {{(node ...)}}.  If a single {{node}} is given, a search
+is performed across all identifiers, and documentation will
+be shown if the node is unique --- otherwise, the matches
+are listed.
+
+ ,toc node
+ ,toc (node ...)
+
+Show a table of contents for the identifier {{node}} or the path
+{{(node ...)}}.  As with {{,doc}}, a search will be performed
+if a single {{node}} is given.
+
+ ,wtf regex
+
+The "where to find" command.  Search identifiers using POSIX
+regular expression {{regex}} (like the -m command-line option)
+and display the matches.
+
+==== Examples
+
+Search for identifier {{define-foreign-type}} and display its
+documentation.
+
+ #;> ,doc define-foreign-type
+ path: (foreign access define-foreign-type)
+ macro: (define-foreign-type NAME TYPE [ARGCONVERT [RETCONVERT]])
+ 
+ Defines an alias for `TYPE` with the name `NAME` (a symbol).
+ `TYPE` may be a type-specifier or a string naming a C type. The
+ [...]
+
+Search for identifier {{file-open}} and (as multiple matches
+occur) display the matches:
+
+ #;> ,doc file-open
+ Found 2 matches:
+ (9p file-open)        (file-open connection path mode)
+ (posix file-open)     (file-open FILENAME FLAGS [MODE])
+
+Display TOC for absolute path {{(chicken macros)}}.  This should list
+all the core chicken macros from [[Non-standard macros and special forms]].
+
+ #;> ,toc (chicken macros)
+ and-let*              (and-let* (BINDING ...) EXP1 EXP2 ...)
+ assert                (assert EXP [STRING ARG ...])
+ begin-for-syntax      (begin-for-syntax EXP ...)
+ [...]
+
+==== Emacs
+
+This elisp snippet will look up the word at point and display its
+documentation (or matches) in your *scheme* window and display it in a
+split window unless it is already visible.
+
+<enscript highlight="elisp">
+(defun chicken-doc (&optional obtain-function)
+  (interactive)
+  (let ((func (funcall (or obtain-function 'current-word))))
+    (when func
+      (process-send-string (scheme-proc)
+                           (format "(require-library chicken-doc) ,doc %S\n" func))
+      (save-selected-window
+        (select-window (display-buffer (get-buffer scheme-buffer) t))
+        (goto-char (point-max))))))
+  
+(eval-after-load 'cmuscheme
+ '(define-key scheme-mode-map "\C-cd" 'chicken-doc))
+</enscript>
+
+Additionally, because multiple matches may be listed, this snippet
+will allow you to place your cursor at the beginning of the match
+s-expression and get the actual documentation:
+
+<enscript highlight="elisp">
+(eval-after-load 'cmuscheme
+ '(define-key inferior-scheme-mode-map "\C-cd"
+    (lambda () (interactive) (chicken-doc 'sexp-at-point))))
+</enscript>
+
+=== API
+
+==== Configuration
+
+<parameter>wrap-column [default: 76]</parameter>
+
+Wrap column for text output.  0 or {{#f}} for no wrapping.
+
+<parameter>chicken-doc-warnings [default: #f]</parameter>
+
+For debugging.  Controls emission of warnings from the text renderer.
+
+When using the command-line tool, you can set the environment variable
+{{CHICKEN_DOC_WARNINGS}} to any value to enable warnings.
+
+==== Repository
+
+<procedure>(verify-repository)</procedure>
+
+Open the repository found in the standard location with {{(locate-repository)}}
+and set the {{(current-repository)}} for the thread.
+Throws an error if the open fails.
+
+This is the standard way to open the chicken-doc repository,
+because the node lookup procedures require {{(current-repository)}} to be set.
+
+<procedure>(open-repository base)</procedure>
+
+Open repository at pathname ''base'' and return a new repository object or
+throw an error if nonexistent or unknown format.
+
+Generally, you will want to use {{verify-repository}} to open
+the repository instead.
+
+<procedure>(close-repository r)</procedure>
+
+Close repository object ''r''.
+
+<parameter>current-repository</parameter>
+
+The current repository; used by the node lookup API.  It is usually set by calling
+{{verify-repository}}.
+
+<procedure>(locate-repository)</procedure>
+
+Return the standard location of the repository, according to
+the rules described in [[#Documentation repository]].  Does not
+check if the repository actually exists.
+
+==== Node lookup
+
+<procedure>(lookup-node path)</procedure>
+
+Return node record at ''path'', or throw an error if the record does
+not exist.  ''path'' is a list of string or symbols which identify
+the node; for example {{'(posix open/rdonly)}}.
+
+<procedure>(match-nodes idre #!optional (limit #f))</procedure>
+
+Return a list of node records whose identifiers match ''idre'', which
+may be an identifier symbol, identifier string or a regular expression
+object.  ''limit'' is an optional integer limit on
+the number of nodes returned, or {{#f}} for no limit.
+
+<procedure>(match-node-paths/re re #!optional (limit #f))</procedure>
+
+Return a list of node records whose full paths match ''re'', a regular
+expression string or object.  ''re'' matches against the string
+representation of the node path, which is composed of each node id
+joined with spaces.  For example, {{'(chicken foreign access)}}
+becomes {{"chicken foreign access"}}.
+
+''limit'' is an optional integer limit on
+the number of nodes returned, or {{#f}} for no limit.
+
+<procedure>(match-ids/prefix str #!optional (limit #f))</procedure>
+
+Return a list of node records whose identifiers match the string
+prefix ''str''.  ''limit'' is an optional integer limit on
+the number of records returned, or {{#f}} for no limit.
+
+<procedure>(match-paths/prefix str #!optional (limit #f))</procedure>
+
+Return a list of node records whose full paths match the string prefix
+''str''.  This matches against the string representation of the node
+path, which is composed of each node id joined with spaces.  For
+example, {{'(chicken foreign access)}} becomes {{"chicken foreign
+access"}}.  ''limit'' is an optional integer limit on
+the number of records returned, or {{#f}} for no limit.
+
+==== Node description
+
+The command-line utility is a thin wrapper around these procedures,
+which print descriptive information to {{current-output-port}}.
+
+<procedure>(describe node)</procedure>
+
+Formats and displays the text contents of ''node''.  An error
+is thrown if no textual content is available.
+
+<procedure>(describe-contents node)</procedure>
+
+Displays the names and signatures of all child nodes
+of ''node''.
+
+<procedure>(describe-signatures nodes)</procedure>
+
+Displays the signatures of all nodes in the list ''nodes''.
+
+<procedure>(doc-dwim pathspec)</procedure>
+
+This "do-what-I-mean" procedure is used by the command line when 
+no options are provided.
+
+If ''pathspec'' is a list, it is treated as a node
+path and the node at that path is looked up and described.
+
+If it is a string or symbol, it is decomposed into a list of node
+identifiers by splitting at each {{#}}.  If this results in one
+identifier, it is matched against and the node is described (if
+exactly one match) or all matched paths are displayed.  Otherwise, the
+identifier list is treated as a node path and the node at that path is
+described.
+
+<procedure>(search-only idre)</procedure>
+
+Search for all nodes matching the identifier or regular expression
+''idre'', and print a description of their signatures.  Equivalent to
+
+ (describe-signatures (match-nodes idre))
+
+==== Node information
+
+<record>chicken-doc-node</record>
+
+The ''chicken-doc-node'' record represents an individual repository node,
+such as {{'(posix)}} or {{'(posix open/rdonly)}}.
+
+<procedure>(node-signature node)</procedure>
+
+Return the signature of ''node'' as a string.  The signature is a node's short
+identifying description.  For example, it may be a procedure signature,
+an identifier or the name of a manual page.
+
+<procedure>(node-type node)</procedure>
+
+Return a symbol representing the type of ''node''.  The currently
+defined node types are: ''egg'' (egg documentation), ''unit'' (manual
+page), ''procedure'', ''parameter'', ''syntax'', ''constant'',
+''read'' (read syntax), ''record'', ''setter'', ''class'', and
+''method''.
+
+Returns {{'unknown}} if type information is not available for some
+reason; however, the current repository backend always provides
+type information.
+
+<procedure>(node-sxml node)</procedure>
+
+Return the sxml contents of ''node'' (as a pair).
+
+<procedure>(node-path node)</procedure>
+
+Return the full node path of ''node'' as a list of identifiers.
+Each returned identifier may be a symbol or a string (this may be
+tightened up in the future).
+
+<procedure>(node-id node)</procedure>
+
+Return the node id of ''node'', which is the last component in
+the full path.  The return value may be a symbol or a string
+(this may be tightened up in the future).
+
+<procedure>(node-timestamp node)</procedure>
+
+Return the timestamp of a node in seconds since the UNIX epoch, or
+{{#f}} if no timestamp is available.  In general, the timestamp is
+that of the source document used to generate this node.
+
+<procedure>(node-children node)</procedure>
+
+Return the children of ''node'' as a list of node records.
+
+<procedure>(node-child node id)</procedure>
+
+Return the child of node record ''node'' having identifier ''id'', as a node record.
+''id'' is a symbol or string.
+
+<procedure>(node-child-ids node)</procedure>
+
+Return a list of identifiers (symbols or strings) of the children of
+''node''.  Semantically equivalent to {{(map node-id (node-children node))}}, 
+but may be significantly less expensive than calling {{node-children}}.
+
+<procedure>(node-definition-ids node)</procedure>
+
+''Experimental''.  Returns a list of identifiers for the definition children of ''node''.
+This is a subset of the identifiers returned by {{node-children}}.
+
+<procedure>(node-definition-id? node id)</procedure>
+
+''Experimental''.  Returns {{#t}} if ''id'' is a definition child of ''node''.
+
+=== About this egg
+
+==== Source
+
+[[https://github.com/ursetto/chicken-doc]]
+
+==== Author
+
+Jim Ursetto
+
+==== Version history
+
+; 0.7.0 : Add always-on and never-on colorization options (wasamasa)
+; 0.6.1 : Fix check for whether we are running inside modern Emacs (wasamasa)
+; 0.6.0 : Repository version 4. Store identifier cache keys as strings not symbols, to avoid read/write invariance issues with read-syntax.
+; 0.5.0 : Port to Chicken 5. Use 0.6.0 instead to avoid a bug in Chicken 5.0.0.
+; 0.4.7 : Add explicit help options (-h --help -?)
+; 0.4.6 : Fix for letrec behavior change in 4.8.3
+; 0.4.5 : Use pre-post-order* to avoid apply limit
+; 0.4.4 : Add limit option to node matching API
+; 0.4.3 : Experimental ANSI bold/underline support; improve int-link display
+; 0.4.2 : Decrease pre and highlight indent from 4 to 2; depend on regex egg
+; 0.4.1 : Improve DL rendering; add {{chicken-doc-warnings}}
+; 0.4.0 : Repository version 3
+; 0.3.2 : POSIX regular expression search
+; 0.3.0 : SXML database, formatting improvements
+; 0.2.0 : Pagination
+; 0.1.1 : Initial release
+
+==== License
+
+BSD
