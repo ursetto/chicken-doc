@@ -4,7 +4,7 @@
 (author "Jim Ursetto")
 (license "BSD")
 (category doc-tools)
-(version "0.6.1")
+(version "0.7.0")
 (dependencies matchable
               fmt  ; fmt >= 0.706, but numbering incompatible in Chicken 5. latest is fine
               sxml-transforms
