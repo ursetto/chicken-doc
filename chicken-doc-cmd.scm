@@ -114,12 +114,18 @@
 ;;; Colors
 
 ;; Called prior to setting up pager so terminal-port? does not take it into account;
-;; if env var set, we assume your pager supports ANSI escape sequences as in less -R.
+;; may be set to always/auto/never via environment variable
+;; if applied, we assume your pager supports ANSI escape sequences as in less -R.
 (define (ansi-colors?)
-  (and (get-environment-variable "CHICKEN_DOC_COLORS")
-       (terminal-port? (current-output-port))
-       (let ((term (get-environment-variable "TERM")))
-         (and term (not (equal? term "dumb"))))))       ;; emacs==dumb
+  (let ((chicken-doc-colors (get-environment-variable "CHICKEN_DOC_COLORS")))
+    (cond
+     ((equal? chicken-doc-colors "always") #t)
+     ((equal? chicken-doc-colors "never") #f)
+     ((equal? chicken-doc-colors "auto")
+      (and (terminal-port? (current-output-port))
+           (let ((term (get-environment-variable "TERM")))
+             (and term (not (equal? term "dumb")))))) ;; emacs==dumb
+     (else #f))))
 
 ;;; Helpers
 
