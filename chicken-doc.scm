@@ -51,7 +51,7 @@
    (use irregex)
    (import (only csi toplevel-command))
    (import chicken-doc-text))
-  (else
+  (chicken-5
    (import (chicken base))
    (import (chicken irregex))
    (import (chicken fixnum))
@@ -66,6 +66,30 @@
    (import (only (chicken io) read-line))
    (import (rename (only (chicken io) read-list)
                    (read-list read-file)))  ;; chicken 4 compat
+   (import (only (chicken process-context) get-environment-variable))
+   (import srfi-1)
+   (import srfi-13)
+   (import srfi-69)
+   (import matchable)
+   (import chicken-doc-text)
+   ;; note: do not import chicken.csi yet
+   )
+  (else
+   (import (scheme base))
+   (import (chicken base))
+   (import (chicken irregex))
+   (import (chicken fixnum))
+   (import (chicken pathname))
+   (import (chicken string))
+   (import (chicken sort))
+   (import (chicken condition))
+   (import (chicken format))
+   (import (chicken file) (chicken file posix))
+   (import (only (chicken platform) chicken-home feature?))
+   (import (only (chicken gc) set-finalizer!))
+   (import (only (chicken io) read-line))
+   (import (rename (only (chicken io) read-list)
+                   (read-list read-file))) ;; chicken 4 compat
    (import (only (chicken process-context) get-environment-variable))
    (import srfi-1)
    (import srfi-13)
@@ -878,6 +902,7 @@
    ;; Load csi library at runtime here in Chicken 5 only after we confirm
    ;; csi is running. Otherwise chicken.csi load fails.
    (chicken-5 (import (only (chicken csi) toplevel-command)))
+   (chicken-6 (import (only (chicken csi) toplevel-command)))
    (else))
   
   (verify-repository)

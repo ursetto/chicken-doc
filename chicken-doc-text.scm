@@ -13,7 +13,17 @@
   (use sxml-transforms)
   (use matchable)
   )
+ (chicken-5
+  (import (chicken base))
+  (import (chicken string) srfi-13)
+  (import (chicken port))
+  (import fmt fmt-unicode)
+  (import sxml-transforms)
+  (import matchable)
+  )
  (else
+  (import scheme)
+  (import (scheme base))
   (import (chicken base))
   (import (chicken string) srfi-13)
   (import (chicken port))
