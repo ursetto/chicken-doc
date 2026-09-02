@@ -85,7 +85,7 @@
    (import (chicken condition))
    (import (chicken format))
    (import (chicken file) (chicken file posix))
-   (import (only (chicken platform) chicken-home feature?))
+   (import (only (chicken platform) include-path feature?))
    (import (only (chicken gc) set-finalizer!))
    (import (only (chicken io) read-line))
    (import (rename (only (chicken io) read-list)
@@ -97,6 +97,9 @@
    (import matchable)
    (import chicken-doc-text)
    ;; note: do not import chicken.csi yet
+
+   (define (chicken-home)
+     (car (include-path)))
    )
 )
 
